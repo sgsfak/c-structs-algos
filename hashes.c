@@ -106,70 +106,217 @@ uint32_t oat_hash(const char *s, size_t len)
 #define HASHSIZE (1U<<HASHBITS)
 
 struct entry {
-    char* word;
-    int hits;
+    char* key;
+    void* val;
     int freq;
-    struct list list_head;
+    uint32_t hash;
+    struct entry* next;
 };
 
-struct entry hashtable[HASHSIZE];
+typedef struct {
+    unsigned int len;
+    struct entry* e;
+} ht_entry;
 
-struct entry* hashtable_search(const char* word, uint32_t h, bool add)
+typedef uint32_t (*hfn_t)(const char*, size_t);
+typedef struct  {
+    unsigned int n;
+    uint8_t bits;
+    unsigned int max_bucket_size;
+    hfn_t hfn;
+    ht_entry* table; 
+} hashtable;
+
+
+#define BITS_TO_HSIZE(b) (1U << (b))
+#define HASH_SIZE(ht) (BITS_TO_HSIZE((ht)->bits))
+#define for_each_htentry(ht,e) for(e=(ht)->table;e!=(ht)->table+HASH_SIZE(ht);e++)
+#define ht_hash_to_bucket(ht,h)  ((ht)->table + ((h) & (HASH_SIZE((ht)) - 1)));
+
+hashtable* ht_create(uint8_t bits)
 {
-    size_t i = (size_t) h % HASHSIZE;
-    struct entry* head = hashtable + i;
-    struct list* list_head = &(head->list_head);
-
-    if (head->word == NULL) {
-        head->word = strdup(word);
-        head->hits++;
-        return head;
+    hashtable *h = malloc(sizeof(hashtable));
+    if (!h) {
+        perror("ht_create");
+        return NULL;
     }
-    struct list* e;
-    list_for_each(e, list_head) {
-        struct entry* entry = list_entry(e, struct entry, list_head);
-        if (strcmp(entry->word, word) == 0) {
-            return entry;
+    h->bits = bits;
+    h->n = 0;
+    h->max_bucket_size = 0;
+    h->table = calloc(BITS_TO_HSIZE(h->bits), sizeof(ht_entry));
+    if (h->table == NULL) {
+        perror("ht_create");
+        free(h);
+        return NULL;
+    }
+    return h;
+}
+
+struct entry* _ht_entry_create(hashtable* ht, const char* word, uint32_t h)
+{
+    struct entry* e = malloc(sizeof(struct entry));
+    if (!e) {
+        perror("_ht_entry_create");
+        return NULL;
+    }
+    e->key = strdup(word);
+    e->hash = h;
+    return e;
+}
+
+void _ht_entry_destroy(hashtable* ht, ht_entry* he)
+{
+    for(struct entry* t = he->e; t;) {
+        struct entry* tnext = t->next;
+        free(t->key);
+        free(t);
+        t = tnext;
+    }
+    he->e = NULL;
+    he->len = 0;
+} 
+
+void ht_destroy(hashtable* ht)
+{
+    ht_entry* e;
+    for_each_htentry(ht,e) _ht_entry_destroy(ht, e);
+    free(ht->table);
+    free(ht);
+}
+
+void ht_traverse(hashtable* ht, int (*action) (struct entry*, void*), void* arg)
+{
+    ht_entry* he;
+    for_each_htentry(ht,he) {
+        for (struct entry* e = he->e; e; e = e->next) {
+            int w = action(e, arg);
+            if (w < 0)
+                return;
+        }
+    }
+}
+
+float ht_load_factor(hashtable* h)
+{
+    return h->n*1.0/HASH_SIZE(h);
+}
+
+ht_entry* ht_key_to_bucket(hashtable* ht, const char* word)
+{
+    uint32_t h = ht->hfn(word, strlen(word));
+    ht_entry* b = ht_hash_to_bucket(ht, h);
+    return b;
+}
+
+
+void _ht_insert_entry(hashtable* ht, ht_entry* bucket, struct entry* e);
+void _ht_rehash(hashtable* ht)
+{
+    printf("Current load factor %4.2f.. rehashing to %d bits..\n", ht_load_factor(ht), ht->bits+1);
+    hashtable* hnew = ht_create(ht->bits + 1);
+    if (!hnew)
+        return;
+    ht_entry* he;
+    for_each_htentry(ht,he) {
+        for (struct entry* e = he->e; e;) {
+            struct entry* t = e->next;
+            ht_entry* b = ht_hash_to_bucket(hnew, e->hash);
+            _ht_insert_entry(hnew, b, e);
+            e = t;
+        }
+        he->e = NULL;
+    }
+
+    free(ht->table);
+    ht->table = hnew->table;
+    ht->bits ++;
+    free(hnew);
+}
+void _ht_insert_entry(hashtable* ht, ht_entry* bucket, struct entry* e)
+{
+    unsigned int size = HASH_SIZE(ht);
+    unsigned int n = ht->n;
+    if (n + 1 > (size >> 1)) {
+        /* We need to rehash ... */
+        _ht_rehash(ht);
+    }
+
+    bucket->len++;
+    e->next = bucket->e;
+    bucket->e = e;
+    ht->n++;
+    if (bucket->len > ht->max_bucket_size)
+        ht->max_bucket_size = bucket->len;
+}
+
+void ht_delete(hashtable* ht, const char* word)
+{
+    uint32_t h = ht->hfn(word, strlen(word));
+    ht_entry* b = ht_hash_to_bucket(ht, h);
+
+    if (b->e == NULL) {
+        return;
+    }
+    struct entry** e;
+    for (e = &b->e; *e; ) {
+        struct entry* t = *e;
+        if (h == t->hash && strcmp(t->key, word) == 0) {
+            *e = t->next;
+            free(t);
+            b->len--;
+            ht->n--;
+            return;
+        }
+        e = &t->next;
+    }
+}
+
+struct entry* ht_search(hashtable* ht, const char* word, bool add)
+{
+    uint32_t h = ht->hfn(word, strlen(word));
+    ht_entry* b = ht_hash_to_bucket(ht, h);
+
+    struct entry* e;
+    if (b->e == NULL) {
+        if (add) {
+            e = _ht_entry_create(ht, word, h);
+            if (!e)
+                return NULL;
+            _ht_insert_entry(ht, b, e);
+            return e;
+        }
+        return NULL;
+    }
+    for (e = b->e; e; e = e->next) {
+        if (h == e->hash && strcmp(e->key, word) == 0) {
+            return e;
         }
     }
     if (!add)
         return NULL;
 
-    struct entry* entry = calloc(1, sizeof (struct entry));
-    entry->word = strdup(word);
-    list_insert(list_head, &entry->list_head);
-    head->hits++;
-    return entry;
+    e = _ht_entry_create(ht, word, h);
+    if (!e)
+        return NULL;
+    _ht_insert_entry(ht, b, e);
+    return e;
 }
 
-void print(struct entry* hashtable, int len)
+
+int find_max(struct entry* e, void * arg)
 {
-    for (unsigned i=0; i<len; ++i) {
-        struct entry* p = hashtable+i;
-        if (p->word) {
-            printf("'%s'\t%d\n", p->word, p->freq);
-            for (struct list* p= hashtable[i].list_head.next; p != &(hashtable[i].list_head); p = p->next) {
-                struct entry* e = list_entry(p, struct entry, list_head);
-                printf("'%s'\t%d\n", e->word, e->freq);
-            }
-        }
-    }
+    int* a = (int*) arg;
+    if (e->freq > *a)
+        *a = e->freq;
+    return 0;
 }
 
 int main(int argc, char* argv[])
 {
-    struct entry* p;
-    size_t len = HASHSIZE;
-    uint32_t (*hfn)(const char*, size_t);
+    uint8_t bits = 6;
+    hashtable* ht = ht_create(bits);
 
-    for (p = hashtable, len=HASHSIZE; len--;p++) {
-        p->word = NULL;
-        p->hits = 0;
-        p->freq = 0;
-        list_init_head(&p->list_head);
-    }
-
-    hfn = h31_hash;
+    hfn_t hfn = h31_hash;
     if (argc>1) {
         switch (atoi(argv[1])) {
             case 1:
@@ -190,6 +337,7 @@ int main(int argc, char* argv[])
                 break;
         }
     }
+    ht->hfn = hfn;
 
     FILE* fp = fopen("book.txt", "r");
     if (!fp) {
@@ -197,26 +345,43 @@ int main(int argc, char* argv[])
         exit(-1);
     }
     char word[BUFSIZ]; /*big enough*/
+    int k = 0;
     while(1)
     {
         if(fscanf(fp,"%s",word)!=1)
             break;
-        uint32_t h = hfn(word, strlen(word));
-        struct entry* e = hashtable_search(word, h, true);
+        struct entry* e = ht_search(ht, word, true);
         e->freq++;
+        k++;
     }
+    printf("Read %d words..\n", k);
 
 
     fclose(fp);
 
-    int n = 0;
-    int collisions = 0;
-    for (p = hashtable, len=HASHSIZE; len--; p++) {
-        if (p->word) {
-            ++n;
-            collisions += p->hits;
-        }
+    printf("Size: %u (total: %u) Load: %4.2f max bucket size=%d\n", 
+            ht->n, BITS_TO_HSIZE(ht->bits), ht_load_factor(ht),ht->max_bucket_size);
+    struct entry* e = ht_search(ht, "president,", false);
+    if (e) {
+        ht_entry* b = ht_hash_to_bucket(ht, e->hash);
+        printf("'president' found: freq = %d collisions=%d\n", e->freq, b->len);
     }
-    printf("N=%d, collisions=%d F=%.3g\n", n, collisions, collisions*1.0/n);
-    print(hashtable, HASHSIZE);
+    ht_delete(ht, "the");
+    e = ht_search(ht, "the", false);
+    printf("Now %p\n", e);
+
+    ht_entry* b, *m;
+    m = ht->table;
+    for_each_htentry(ht, b) {
+        if (b->len > m->len)
+            m = b;
+    }
+    printf("Most collisions: %d at %ld\n", m->len, m - ht->table);
+    for (struct entry* e= m->e; e; e= e->next) {
+        printf("\t'%s' hash=%u freq=%d\n", e->key, e->hash, e->freq); 
+    }
+    int max_freq = 0;
+    ht_traverse(ht, find_max, &max_freq);
+    printf("Max frequency: %d\n", max_freq);
+    ht_destroy(ht);
 }
