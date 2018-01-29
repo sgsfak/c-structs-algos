@@ -45,17 +45,14 @@ uint32_t h31_hash(const char* s, size_t len)
  */
 uint32_t fnv32_hash(const char *str, size_t len)
 {
-    unsigned char *s = (unsigned char *)str;	/* unsigned string */
+    unsigned char *s = (unsigned char *)str;
 
     const uint32_t FNV_32_PRIME = 0x01000193;
 
     uint32_t h = 0x811c9dc5; /* 2166136261 */
-    while (len) {
-        /* multiply by the 32 bit FNV magic prime mod 2^32 */
+    while (len--) {
         h *= FNV_32_PRIME;
-        /* xor the bottom with the current octet */
         h ^= *s++;
-        --len;
     }
 
     return h;
@@ -101,10 +98,6 @@ uint32_t oat_hash(const char *s, size_t len)
     return h;
 }
 
-
-#define HASHBITS 15
-#define HASHSIZE (1U<<HASHBITS)
-
 struct entry {
     char* key;
     void* val;
@@ -133,17 +126,16 @@ typedef struct  {
 #define for_each_htentry(ht,e) for(e=(ht)->table;e!=(ht)->table+HASH_SIZE(ht);e++)
 #define ht_hash_to_bucket(ht,h)  ((ht)->table + ((h) & (HASH_SIZE((ht)) - 1)));
 
-hashtable* ht_create(uint8_t bits)
+hashtable* ht_create(uint8_t bits, hfn_t hfn)
 {
-    hashtable *h = malloc(sizeof(hashtable));
+    hashtable *h = calloc(1U, sizeof(hashtable));
     if (!h) {
         perror("ht_create");
         return NULL;
     }
     h->bits = bits;
-    h->n = 0;
-    h->max_bucket_size = 0;
-    h->table = calloc(BITS_TO_HSIZE(h->bits), sizeof(ht_entry));
+    h->hfn = hfn;
+    h->table = calloc(HASH_SIZE(h), sizeof(ht_entry));
     if (h->table == NULL) {
         perror("ht_create");
         free(h);
@@ -213,7 +205,7 @@ void _ht_insert_entry(hashtable* ht, ht_entry* bucket, struct entry* e);
 void _ht_rehash(hashtable* ht)
 {
     printf("Current load factor %4.2f.. rehashing to %d bits..\n", ht_load_factor(ht), ht->bits+1);
-    hashtable* hnew = ht_create(ht->bits + 1);
+    hashtable* hnew = ht_create(ht->bits + 1, ht->hfn);
     if (!hnew)
         return;
     ht_entry* he;
@@ -236,7 +228,7 @@ void _ht_insert_entry(hashtable* ht, ht_entry* bucket, struct entry* e)
 {
     unsigned int size = HASH_SIZE(ht);
     unsigned int n = ht->n;
-    if (n + 1 > (size >> 1)) {
+    if (n + 1 > (3*size >> 2)) {
         /* We need to rehash ... */
         _ht_rehash(ht);
     }
@@ -271,29 +263,29 @@ void ht_delete(hashtable* ht, const char* word)
     }
 }
 
-struct entry* ht_search(hashtable* ht, const char* word, bool add)
+struct entry* ht_get(hashtable* ht, const char* word)
+{
+    uint32_t h = ht->hfn(word, strlen(word));
+    ht_entry* b = ht_hash_to_bucket(ht, h);
+    for (struct entry* e = b->e; e; e = e->next) {
+        if (h == e->hash && strcmp(e->key, word) == 0) {
+            return e;
+        }
+    }
+    return NULL;
+}
+
+struct entry* ht_put(hashtable* ht, const char* word)
 {
     uint32_t h = ht->hfn(word, strlen(word));
     ht_entry* b = ht_hash_to_bucket(ht, h);
 
     struct entry* e;
-    if (b->e == NULL) {
-        if (add) {
-            e = _ht_entry_create(ht, word, h);
-            if (!e)
-                return NULL;
-            _ht_insert_entry(ht, b, e);
-            return e;
-        }
-        return NULL;
-    }
     for (e = b->e; e; e = e->next) {
         if (h == e->hash && strcmp(e->key, word) == 0) {
             return e;
         }
     }
-    if (!add)
-        return NULL;
 
     e = _ht_entry_create(ht, word, h);
     if (!e)
@@ -302,6 +294,10 @@ struct entry* ht_search(hashtable* ht, const char* word, bool add)
     return e;
 }
 
+bool ht_exists(hashtable* ht, const char* word)
+{
+    return ht_get(ht, word) != NULL;
+}
 
 int find_max(struct entry* e, void * arg)
 {
@@ -314,12 +310,11 @@ int find_max(struct entry* e, void * arg)
 int main(int argc, char* argv[])
 {
     uint8_t bits = 6;
-    hashtable* ht = ht_create(bits);
-
-    hfn_t hfn = h31_hash;
+    hfn_t hfn = fnv32_hash;
     if (argc>1) {
         switch (atoi(argv[1])) {
             case 1:
+                hfn = h31_hash;
                 break;
             case 2:
                 hfn = ejb_hash;
@@ -337,7 +332,7 @@ int main(int argc, char* argv[])
                 break;
         }
     }
-    ht->hfn = hfn;
+    hashtable* ht = ht_create(bits, hfn);
 
     FILE* fp = fopen("book.txt", "r");
     if (!fp) {
@@ -350,7 +345,7 @@ int main(int argc, char* argv[])
     {
         if(fscanf(fp,"%s",word)!=1)
             break;
-        struct entry* e = ht_search(ht, word, true);
+        struct entry* e = ht_put(ht, word);
         e->freq++;
         k++;
     }
@@ -361,13 +356,13 @@ int main(int argc, char* argv[])
 
     printf("Size: %u (total: %u) Load: %4.2f max bucket size=%d\n", 
             ht->n, BITS_TO_HSIZE(ht->bits), ht_load_factor(ht),ht->max_bucket_size);
-    struct entry* e = ht_search(ht, "president,", false);
+    struct entry* e = ht_get(ht, "president,");
     if (e) {
         ht_entry* b = ht_hash_to_bucket(ht, e->hash);
         printf("'president' found: freq = %d collisions=%d\n", e->freq, b->len);
     }
     ht_delete(ht, "the");
-    e = ht_search(ht, "the", false);
+    e = ht_get(ht, "the");
     printf("Now %p\n", e);
 
     ht_entry* b, *m;
