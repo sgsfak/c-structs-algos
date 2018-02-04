@@ -327,6 +327,7 @@ lch_value_t* ht_get(lch_hmap_t* ht, const char* word)
 
 lch_value_t* ht_put(lch_hmap_t* ht, const char* word)
 {
+    ht->generation++;
     uint32_t h = ht->hfn(word, strlen(word));
     lch_hmap_bucket* b = ht_hash_to_bucket(ht, h);
 
@@ -340,7 +341,6 @@ lch_value_t* ht_put(lch_hmap_t* ht, const char* word)
     e = _ht_entry_create(ht, word, h);
     if (!e)
         return NULL;
-    ht->generation++;
     _ht_insert_entry(ht, b, e);
     return &e->val;
 }

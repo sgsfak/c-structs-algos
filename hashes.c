@@ -9,6 +9,7 @@
 #include "lch_hmap.h"
 #include "hfn.h"
 
+#include <sys/resource.h>
 struct max_freq {
     lch_key_t key;
     long freq;
@@ -23,6 +24,13 @@ int find_max(lch_key_t key, lch_value_t e, void * arg)
     }
     return 0;
 }
+
+int print_entries(lch_key_t key, lch_value_t e, void * arg)
+{
+    printf("%s\n", key);
+    return 0;
+}
+
 
 char* trim_str(char* s)
 {
@@ -41,7 +49,7 @@ char** parseFile(const char* fn)
 {
     FILE* fp = fopen(fn, "r");
     if (!fp) {
-        perror("main");
+        perror("parseFile");
         exit(-1);
     }
     int s = 1000;
@@ -109,7 +117,7 @@ int main(int argc, char* argv[])
 
     char** lines = parseFile("book.txt");
 
-    lch_hmap_t* ht = ht_create(100, hfn);
+    lch_hmap_t* ht = ht_create(116732, hfn);
     float startTime = (float)clock()/CLOCKS_PER_SEC;
     int k;
     for(k = 0; lines[k]; ++k) {
@@ -125,16 +133,30 @@ int main(int argc, char* argv[])
     }
     free(lines);
 
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+
     lch_hmap_stats_t stats = ht_stats(ht);
-    printf("Gen. %llu Size: %u (total: %u) Load: %4.2f max bucket size=%d\n", 
+    printf("Gen. %llu Size: %u (total: %u) Load: %4.2f max bucket size=%d RSS=%.3lf MB\n", 
             stats.generation,
             stats.nbr_elems, stats.capacity,
             ht_load_factor(ht),
-            stats.max_bucket_size);
+            stats.max_bucket_size,
+            (double) usage.ru_maxrss/(1024.0 * 1024.0));
 
     struct max_freq tt = {0};
+    startTime = (float)clock()/CLOCKS_PER_SEC;
     ht_traverse(ht, find_max, &tt);
-    printf("Max frequency: %ld for word: '%s'\n", tt.freq, tt.key);
+    endTime = (float)clock()/CLOCKS_PER_SEC;
+    printf("Max frequency: %ld for word: '%s' (latency: %.3f ms)\n", tt.freq, tt.key, 1000*(endTime-startTime));
+    startTime = (float)clock()/CLOCKS_PER_SEC;
+    ht_exists(ht, "the");
+    endTime = (float)clock()/CLOCKS_PER_SEC;
+    printf("checking for existence latency: %.3f ms\n", 1000*(endTime-startTime));
+
+
+    /* ht_traverse(ht, print_entries, NULL); */
+
     ht_destroy(ht, NULL);
 
 }
