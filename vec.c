@@ -4,11 +4,7 @@
 #include <stdint.h>
 #include <assert.h>
 
-typedef union {
-    long l;
-    double d;
-    void* p;
-} vec_entry;
+#include "vec.h"
 
 typedef struct vec {
     size_t size;
@@ -46,7 +42,7 @@ void vec_free(vec_entry** a)
 {
     if (*a) {
         Vec* v = _to_vec(*a);
-        fprintf(stderr, "Freeing %p\n", v);
+        /* fprintf(stderr, "Freeing %p\n", v); */
         *a = NULL;
         free(v);
     }
@@ -76,7 +72,7 @@ Vec* _vec_enlarge(Vec* v, size_t newSize)
             free(v);
             return NULL;
         }
-        fprintf(stderr, "Reallocating to size=%zu and &v=%p\n", sz, t);
+        /* fprintf(stderr, "Reallocating to size=%zu and &v=%p\n", sz, t); */
         v = t;
         v->size = sz;
     }
@@ -114,23 +110,4 @@ vec_entry* vec_append(vec_entry* a, vec_entry elem)
 }
         
 
-
-
-int main()
-{
-    vec_entry* v = vec_create(0);
-
-    const int max = 20;
-
-    vec_entry e;
-    for (int i=0; i<max; ++i) {
-        e.l = i;
-        v = vec_append(v, e);
-    }
-
-    for (int i = 0; i<vec_length(v); ++i)
-        printf("array[%d]=%ld\n", i, v[i].l);
-
-    vec_free(&v);
-}
 

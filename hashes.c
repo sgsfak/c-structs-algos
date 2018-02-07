@@ -9,6 +9,8 @@
 #include "lch_hmap.h"
 #include "hfn.h"
 
+#include "vec.h"
+
 #include <sys/resource.h>
 struct max_freq {
     lch_key_t key;
@@ -45,7 +47,7 @@ char* trim_str(char* s)
     return s;
 }
 
-char** parseFile(const char* fn)
+vec_entry* parseFile(const char* fn)
 {
     FILE* fp = fopen(fn, "r");
     if (!fp) {
@@ -53,8 +55,7 @@ char** parseFile(const char* fn)
         exit(-1);
     }
     int s = 1000;
-    char** lines = malloc(s*sizeof(*lines));
-    int k = 0;
+    vec_entry* lines = vec_create(s);
     float startTime = (float)clock()/CLOCKS_PER_SEC;
     char *word = NULL; 
     size_t linecap = 0;
@@ -64,22 +65,15 @@ char** parseFile(const char* fn)
         word[len-1] = '\0';
         const char* sep = " \t\n\x0B\f\r\"'";
         for (char* str = strtok(word, sep); str ; str = strtok(NULL, sep)) {
-            if (k == s) {
-                s += 1000;
-                lines = realloc(lines, s * sizeof(*lines));
-            }
-            lines[k++] = strdup(str);
+            vec_entry e;
+            e.p = strdup(str);
+            lines = vec_append(lines, e);
         }
     }
     free(word);
-    if (k == s) {
-        s += 1;
-        lines = realloc(lines, s * sizeof(*lines));
-    }
-    lines[k] = NULL;
 
     float endTime = (float)clock()/CLOCKS_PER_SEC;
-    printf("Read %d words in %.3f ms..\n", k, 1000*(endTime - startTime));
+    printf("Read %zu words in %.3f ms..\n", vec_length(lines), 1000*(endTime - startTime));
     fclose(fp);
     return lines;
 }
@@ -115,23 +109,20 @@ int main(int argc, char* argv[])
         }
     }
 
-    char** lines = parseFile("book.txt");
+    vec_entry* lines = parseFile("book.txt");
 
     lch_hmap_t* ht = ht_create(116732, hfn);
     float startTime = (float)clock()/CLOCKS_PER_SEC;
-    int k;
-    for(k = 0; lines[k]; ++k) {
-        char* word = lines[k];
+    int k, n = vec_length(lines);
+    for(k = 0; k<n; ++k) {
+        char* word = lines[k].p;
         lch_value_t* e = ht_put(ht, word);
         e->l++;
     }
     float endTime = (float)clock()/CLOCKS_PER_SEC;
     printf("Hashed %d words in %.3f ms..\n", k, 1000*(endTime - startTime));
 
-    for(int j = 0; lines[j]; ++j) {
-        free(lines[j]);
-    }
-    free(lines);
+    vec_free(&lines);
 
     struct rusage usage;
     getrusage(RUSAGE_SELF, &usage);
