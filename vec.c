@@ -19,11 +19,11 @@ vec_entry* vec_create(size_t initialSize)
     const size_t DEFAULT_INIT_SIZE = 10;
     size_t initial = initialSize > DEFAULT_INIT_SIZE ? initialSize : DEFAULT_INIT_SIZE;
     size_t entry_size = sizeof(vec_entry);
-    if (SIZE_MAX / entry_size < initial) {
+    if ((SIZE_MAX - sizeof(Vec)) / entry_size < initial) {
         errno = ENOMEM;
         return NULL;
     }
-    Vec* v = malloc(sizeof(*v) + initial * entry_size);
+    Vec* v = malloc(sizeof(Vec) + initial * entry_size);
     if (!v) {
         perror("vec_append");
         return NULL;
@@ -68,11 +68,11 @@ static Vec* _vec_enlarge(Vec* v, size_t newSize)
     if (sz < newSize)
         sz = newSize;
     size_t entry_size = sizeof(v->arr[0]);
-    if (SIZE_MAX / entry_size < sz) {
+    if ((SIZE_MAX - sizeof(Vec)) / entry_size < sz) {
         errno = ENOMEM;
         return NULL;
     }
-    Vec* t = realloc(v, sizeof(*v) + sz * entry_size);
+    Vec* t = realloc(v, sizeof(Vec) + sz * entry_size);
     if (!t) {
         perror("vec_enlarge");
         free(v);
