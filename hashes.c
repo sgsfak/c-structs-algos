@@ -67,7 +67,7 @@ vec_entry* parseFile(const char* fn)
         for (char* str = strtok(word, sep); str ; str = strtok(NULL, sep)) {
             vec_entry e;
             e.p = strdup(str);
-            lines = vec_append(lines, e);
+            vec_append(&lines, e);
         }
     }
     free(word);
@@ -77,6 +77,13 @@ vec_entry* parseFile(const char* fn)
     fclose(fp);
     return lines;
 }
+
+
+void free_entry(vec_entry v)
+{
+    free(v.p);
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -122,7 +129,7 @@ int main(int argc, char* argv[])
     float endTime = (float)clock()/CLOCKS_PER_SEC;
     printf("Hashed %d words in %.3f ms..\n", k, 1000*(endTime - startTime));
 
-    vec_free(&lines);
+    vec_free(&lines, free_entry);
 
     struct rusage usage;
     getrusage(RUSAGE_SELF, &usage);
