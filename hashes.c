@@ -29,7 +29,7 @@ int find_max(lch_key_t key, lch_value_t e, void * arg)
 
 int print_entries(lch_key_t key, lch_value_t e, void * arg)
 {
-    printf("%s\n", key);
+    printf("%s\t%ld\n", key, e.l);
     return 0;
 }
 
@@ -63,7 +63,7 @@ vec_entry* parseFile(const char* fn)
 
     while ((len = getline(&word, &linecap, fp)) != -1) {
         word[len-1] = '\0';
-        const char* sep = " \t\n\x0B\f\r\"'";
+        const char* sep = " \t\n\x0B\f\r\"'.,();!-:?&|^&";
         for (char* str = strtok(word, sep); str ; str = strtok(NULL, sep)) {
             vec_entry e;
             e.p = strdup(str);
