@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <assert.h>
+#include <errno.h>
 
 #include "vec.h"
 
@@ -17,7 +18,12 @@ vec_entry* vec_create(size_t initialSize)
 {
     const size_t DEFAULT_INIT_SIZE = 10;
     size_t initial = initialSize > DEFAULT_INIT_SIZE ? initialSize : DEFAULT_INIT_SIZE;
-    Vec* v = malloc(sizeof(*v) + initial * sizeof(v->arr[0]));
+    size_t entry_size = sizeof(vec_entry);
+    if (SIZE_MAX / entry_size < initial) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    Vec* v = malloc(sizeof(*v) + initial * entry_size);
     if (!v) {
         perror("vec_append");
         return NULL;
@@ -61,7 +67,12 @@ static Vec* _vec_enlarge(Vec* v, size_t newSize)
     size_t sz = (v->size * 3) >> 1;
     if (sz < newSize)
         sz = newSize;
-    Vec* t = realloc(v, sizeof(*v) + sz * sizeof(v->arr[0]));
+    size_t entry_size = sizeof(v->arr[0]);
+    if (SIZE_MAX / entry_size < sz) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    Vec* t = realloc(v, sizeof(*v) + sz * entry_size);
     if (!t) {
         perror("vec_enlarge");
         free(v);
