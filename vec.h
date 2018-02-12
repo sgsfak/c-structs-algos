@@ -7,7 +7,9 @@ extern "C" {
 #endif
 
     typedef union {
+        int i;
         long l;
+        long long ll;
         double d;
         void* p;
     } vec_entry;
@@ -17,10 +19,9 @@ extern "C" {
     size_t vec_size(vec_entry* a);
     size_t vec_length(vec_entry* a);
 
-    vec_entry* vec_increase_size(vec_entry** a, size_t nel);
-
-    vec_entry* vec_ensure_capasity(vec_entry** a, size_t newSize);
+    vec_entry* vec_resize(vec_entry** a, size_t newSize);
     vec_entry* vec_append(vec_entry** a, vec_entry elem);
+    vec_entry* vec_remove(vec_entry** a, size_t pos);
 
 #ifdef __cplusplus
 }

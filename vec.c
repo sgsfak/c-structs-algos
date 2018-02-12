@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <assert.h>
+#include <string.h>
 #include <errno.h>
 
 #include "vec.h"
@@ -14,27 +15,40 @@ typedef struct vec {
 } Vec;
 
 
+#define _to_vec(_ptr_) ((Vec *)((void *)(_ptr_) - offsetof(Vec, arr)))
+
+static Vec* _vec_resize(Vec* v, size_t newSize)
+{
+    size_t entry_size = sizeof(v->arr[0]);
+    if ((SIZE_MAX - sizeof(Vec)) / entry_size < newSize) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    Vec* t = realloc(v, sizeof(Vec) + newSize * entry_size);
+    if (!t) {
+        perror("_vec_resize");
+        free(v);
+        return NULL;
+    }
+    /* fprintf(stderr, "Reallocating to size=%zu and &v=%p\n", newSize, t); */
+    v = t;
+    v->size = newSize;
+    return v;
+}
+
 vec_entry* vec_create(size_t initialSize)
 {
     const size_t DEFAULT_INIT_SIZE = 10;
     size_t initial = initialSize > DEFAULT_INIT_SIZE ? initialSize : DEFAULT_INIT_SIZE;
-    size_t entry_size = sizeof(vec_entry);
-    if ((SIZE_MAX - sizeof(Vec)) / entry_size < initial) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    Vec* v = malloc(sizeof(Vec) + initial * entry_size);
+    Vec* v = NULL;
+    v = _vec_resize(v, initial);
     if (!v) {
-        perror("vec_append");
         return NULL;
     }
     v->length = 0;
-    v->size = initial;
-
     return v->arr;
 }
 
-#define _to_vec(_ptr_) ((Vec *)((void *)(_ptr_) - offsetof(Vec, arr)))
 
 void vec_free(vec_entry** a, void (*dtor)(vec_entry))
 {
@@ -62,49 +76,16 @@ size_t vec_length(vec_entry* a)
     return v->length;
 }
 
-static Vec* _vec_enlarge(Vec* v, size_t newSize)
-{
-    size_t sz = (v->size * 3) >> 1;
-    if (sz < newSize)
-        sz = newSize;
-    size_t entry_size = sizeof(v->arr[0]);
-    if ((SIZE_MAX - sizeof(Vec)) / entry_size < sz) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    Vec* t = realloc(v, sizeof(Vec) + sz * entry_size);
-    if (!t) {
-        perror("vec_enlarge");
-        free(v);
-        return NULL;
-    }
-    /* fprintf(stderr, "Reallocating to size=%zu and &v=%p\n", sz, t); */
-    v = t;
-    v->size = sz;
-    return v;
-}
-
-vec_entry* vec_increase_size(vec_entry** a, size_t nel)
+vec_entry* vec_resize(vec_entry** a, size_t newSize)
 {
     Vec* v = _to_vec(*a);
-    size_t newSize = v->size + nel;
-    v = _vec_enlarge(v, newSize);
-    if (!v)
-        return NULL;
-    *a = v->arr;
-    return v->arr;
-}
-
-vec_entry* vec_ensure_capasity(vec_entry** a, size_t newSize)
-{
-    Vec* v = _to_vec(*a);
-    if (v->size < newSize) {
-        v = _vec_enlarge(v, newSize);
+    if (v->size != newSize) {
+        v = _vec_resize(v, newSize);
         if (!v)
             return NULL;
+        *a = v->arr;
     }
-    *a = v->arr;
-    return v->arr;
+    return *a;
 }
 
 vec_entry* vec_append(vec_entry** a, vec_entry elem)
@@ -112,7 +93,8 @@ vec_entry* vec_append(vec_entry** a, vec_entry elem)
     Vec* v = _to_vec(*a);
     size_t l = v->length;
     if (v->size < l+1) {
-        v = _vec_enlarge(v, l+1);
+        size_t sz = (v->size * 3) >> 1;
+        v = _vec_resize(v, sz);
         if (!v)
             return NULL;
     }
@@ -121,5 +103,22 @@ vec_entry* vec_append(vec_entry** a, vec_entry elem)
     return v->arr;
 }
 
+vec_entry* vec_remove(vec_entry** a, size_t pos)
+{
+    Vec* v = _to_vec(*a);
+    assert(pos < v->length);
+    if (pos < v->length - 1) {
+        memmove(v->arr + pos, v->arr+pos+1, (v->length - pos - 1)*sizeof *v->arr);
+    }
+    v->length--;
+    if (3 * v->length < v->size) {
+        size_t sz = v->size >> 1;
+        v = _vec_resize(v, sz);
+        if (!v)
+            return NULL;
+        *a = v->arr;
+    }
+    return v->arr;
+}
 
 
