@@ -103,6 +103,26 @@ vec_entry* vec_append(vec_entry** a, vec_entry elem)
     return v->arr;
 }
 
+
+vec_entry* vec_insert(vec_entry** a, size_t pos, vec_entry elem)
+{
+    Vec* v = _to_vec(*a);
+    assert(pos <= v->length);
+    if (v->size < v->length + 1) {
+        size_t sz = (v->size * 3) >> 1;
+        v = _vec_resize(v, sz);
+        if (!v)
+            return NULL;
+    }
+    if (pos < v->length) {
+        memmove(v->arr + pos + 1, v->arr+pos, (v->length - pos)*sizeof *v->arr);
+    }
+    v->arr[pos] = elem;
+    v->length++;
+    *a = v->arr;
+    return v->arr;
+}
+
 vec_entry* vec_remove(vec_entry** a, size_t pos)
 {
     Vec* v = _to_vec(*a);

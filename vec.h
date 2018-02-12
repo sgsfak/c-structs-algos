@@ -21,6 +21,7 @@ extern "C" {
 
     vec_entry* vec_resize(vec_entry** a, size_t newSize);
     vec_entry* vec_append(vec_entry** a, vec_entry elem);
+    vec_entry* vec_insert(vec_entry** a, size_t pos, vec_entry elem);
     vec_entry* vec_remove(vec_entry** a, size_t pos);
 
 #ifdef __cplusplus

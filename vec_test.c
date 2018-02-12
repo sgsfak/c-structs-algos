@@ -19,6 +19,9 @@ int main()
     }
     printf("array size=%zu and len=%zu\n", vec_size(v), vec_length(v));
 
+    vec_insert(&v, 0, (vec_entry){.l=-1});
+    printf("array size=%zu and len=%zu\n", vec_size(v), vec_length(v));
+
     for (int i = 0; i<vec_length(v); ++i)
         printf("array[%d]=%ld\n", i, v[i].l);
 
