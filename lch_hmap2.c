@@ -426,7 +426,7 @@ lch_value_t* ht_put(lch_hmap_t* ht, const char* word)
     return val;
 }
 
-bool ht_exists(lch_hmap_t* ht, const char* word)
+bool ht_contains(lch_hmap_t* ht, const char* word)
 {
     return ht_get(ht, word) != NULL;
 }

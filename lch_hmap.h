@@ -58,9 +58,9 @@ extern "C" {
     lch_value_t* ht_put(lch_hmap_t* ht, const char* word);
 
     /*
-     * Checks is the given key exists in the hashmap
+     * Checks if the given key is contained in the hashmap
      */
-    bool ht_exists(lch_hmap_t* ht, const char* word);
+    bool ht_contains(lch_hmap_t* ht, const char* word);
 
     void ht_traverse(lch_hmap_t* ht, 
             int (*action) (lch_key_t, lch_value_t, void*), void* arg);
