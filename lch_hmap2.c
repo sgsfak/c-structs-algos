@@ -243,6 +243,13 @@ void ht_traverse(lch_hmap_t* ht,
     }
 }
 
+void ht_traverse_ordered(lch_hmap_t* ht,
+        int (*action) (lch_key_t, lch_value_t, void*), void* arg) {
+  /* XXX : not implemented */
+  ht_traverse(ht, action, arg);
+
+}
+
 float ht_load_factor(lch_hmap_t* h)
 {
     return h->n*1.0/HASH_SIZE(h);

@@ -65,6 +65,9 @@ extern "C" {
     void ht_traverse(lch_hmap_t* ht, 
             int (*action) (lch_key_t, lch_value_t, void*), void* arg);
 
+    void ht_traverse_ordered(lch_hmap_t* ht, 
+            int (*action) (lch_key_t, lch_value_t, void*), void* arg);
+
     /*
      * Destroys/deallocates the hashmap. If destroy_val_fn is not NULL
      * it is called for each lch_value_t in the hashmap

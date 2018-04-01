@@ -12,6 +12,8 @@ typedef struct lch_hmap_entry {
     lch_value_t val;
     uint32_t hash; /* the hash of the key, cached */
     struct lch_hmap_entry* next;
+    struct lch_hmap_entry* older; /* Entry inserted/accessed prior to this one */
+    struct lch_hmap_entry* newer; /* Entry inserted/accessed after this one */
 } lch_hmap_entry_t;
 
 typedef struct {
@@ -27,6 +29,7 @@ struct lch_hmap  {
     unsigned long long generation;
     hfn_t hfn;
     lch_hmap_bucket* table;  /* buckets */
+    lch_hmap_entry_t* first; /* the 'head' for keeping the insertion/accession order */
 };
 
 lch_hmap_stats_t ht_stats(lch_hmap_t* h)
@@ -198,11 +201,11 @@ static lch_hmap_entry_t* _ht_entry_create(lch_hmap_t* ht, const char* word, uint
 static void _ht_entry_destroy(lch_hmap_t* ht, lch_hmap_bucket* he,
         void (*destroy_val_fn)(lch_value_t))
 {
-    for(lch_hmap_entry_t* t = he->e; t;) {
-        lch_hmap_entry_t* tnext = t->next;
+    for(lch_hmap_entry_t* t = he->e; t; ) {
         free(t->key);
         if (destroy_val_fn != NULL)
             destroy_val_fn(t->val);
+        lch_hmap_entry_t* tnext = t->next;
         free(t);
         t = tnext;
     }
@@ -231,6 +234,22 @@ void ht_traverse(lch_hmap_t* ht,
                 return;
         }
     }
+}
+void ht_traverse_ordered(lch_hmap_t* ht,
+        int (*action) (lch_key_t, lch_value_t, void*), void* arg)
+{
+    unsigned long long generation = ht->generation;
+    lch_hmap_entry_t* e = ht->first;
+    if (!e)
+        return;
+    do {
+        int w = action(e->key, e->val, arg);
+        assert(ht->generation == generation);
+        if (w < 0)
+            return;
+        e = e->newer;
+    }
+    while (e && e != ht->first);
 }
 
 float ht_load_factor(lch_hmap_t* h)
@@ -303,10 +322,22 @@ void ht_delete(lch_hmap_t* ht, const char* word)
         lch_hmap_entry_t* t = *e;
         if (h == t->hash && strcmp(t->key, word) == 0) {
             *e = t->next;
+
+            if (t->newer == t) {
+                /* The element to be deleted is the last one! */
+                ht->first = NULL;
+            }
+            else {
+                t->newer->older = t->older;
+                t->older->newer = t->newer;
+                if (ht->first == t)
+                    ht->first = t->newer;
+            }
+            free(t->key);
             free(t);
             b->len--;
             ht->n--;
-            ht->generation--;
+            ht->generation++;
             return;
         }
         e = &t->next;
@@ -342,6 +373,19 @@ lch_value_t* ht_put(lch_hmap_t* ht, const char* word)
     if (!e)
         return NULL;
     _ht_insert_entry(ht, b, e);
+    if (ht->first) {
+        lch_hmap_entry_t* tail = ht->first->older;
+        e->older = tail;
+        e->newer = tail->newer;
+        tail->newer->older = e;
+        tail->newer = e;
+    }
+    else {
+        e->older = e;
+        e->newer = e;
+        ht->first = e;
+    }
+
     return &e->val;
 }
 

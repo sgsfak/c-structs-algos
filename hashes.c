@@ -32,6 +32,12 @@ int print_entries(lch_key_t key, lch_value_t e, void * arg)
     printf("%s\t%ld\n", key, e.l);
     return 0;
 }
+int print_entries_head(lch_key_t key, lch_value_t e, void * arg)
+{
+    int * n = arg;
+    printf("WORD %d: %s\t%ld\n", *n, key, e.l);
+    return (++*n > 100) ? -1 : 0;
+}
 
 
 char* trim_str(char* s)
@@ -144,7 +150,7 @@ int main(int argc, char* argv[])
 
     struct max_freq tt = {0};
     startTime = (float)clock()/CLOCKS_PER_SEC;
-    ht_traverse(ht, find_max, &tt);
+    ht_traverse_ordered(ht, find_max, &tt);
     endTime = (float)clock()/CLOCKS_PER_SEC;
     printf("Max frequency: %ld for word: '%s' (latency: %.3f ms)\n", tt.freq, tt.key, 1000*(endTime-startTime));
     startTime = (float)clock()/CLOCKS_PER_SEC;
@@ -153,7 +159,8 @@ int main(int argc, char* argv[])
     printf("checking for existence latency: %.3f ms\n", 1000*(endTime-startTime));
 
 
-    /* ht_traverse(ht, print_entries, NULL); */
+    int nn = 0;
+    ht_traverse_ordered(ht, print_entries, &nn);
 
     ht_destroy(ht, NULL);
 
