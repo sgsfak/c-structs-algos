@@ -1,4 +1,4 @@
-CC=clang
+CC=cc
 CFLAGS=-O2 -Wall -std=c99
 
 CFLAGS += -MMD -MP
