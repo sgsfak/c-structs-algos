@@ -19,11 +19,12 @@ typedef struct {
     word_pos_t* positions;
 } word_info_t;
 
-void free_word_info(word_info_t* info)
+void free_word_info(void* arg)
 {
+    word_info_t* info = (word_info_t*) arg;
     free(info->word);
     free(info->positions);
-    memset(info, 0, sizeof *info);
+    free(info);
 }
 
 #define ISALPHA(c) (((c)>='a' && (c)<='z') || ((c)>='A' && (c)<='Z'))
@@ -95,6 +96,7 @@ int main(int argc, char* argv[])
     if (fp != stdin)
         fclose(fp);
 
+
     printf("Found %d words:\n", trie_count(dic));
     trie_iterator_t* it = trie_dfs_iterator(dic);
     for (word_info_t* n = trie_iterator_next(it); n; n = trie_iterator_next(it)) {
@@ -110,10 +112,12 @@ int main(int argc, char* argv[])
             for (int j=0; j<n->word_len; ++j) printf("^");
             printf("\n");
         }
-
-        free_word_info(n);
     }
     trie_iterator_destroy(it);
+
+
+    // trie_to_dot(dic);
+    trie_destroy(&dic, free_word_info);
 
     for (int i=0; i<total_lines; ++i)
         free(lines[i]);

@@ -31,7 +31,7 @@ struct trie_iterator_t {
 };
 
 struct trie_t {
-    trie_node_t root;
+    trie_node_t* root;
     int count;
 
     trie_iterator_t iter;
@@ -47,6 +47,7 @@ struct trie_node* new_trie_node_(char character, struct trie_node* parent)
     n->data = NULL;
     n->is_end_of_word = 0;
     n->character = character;
+    // printf("NEW %p %c\n", n, character);
     return n;
 }
 
@@ -61,6 +62,13 @@ char* my_strdup(const char* src)
 trie_t *trie_create(void)
 {
     trie_t *t = calloc(1, sizeof(trie_t));
+    if (!t)
+        return NULL;
+    t->root = new_trie_node_('\0', NULL);
+    if (!t->root) {
+        free(t);
+        return NULL;
+    }
     return t;
 }
  
@@ -72,7 +80,7 @@ int trie_count(trie_t *t)
 #define ISALPHA(c) (((c)>='a' && (c)<='z') || ((c)>='A' && (c)<='Z'))
 void* trie_insert(trie_t *t, const char *key, void* data)
 {
-    trie_node_t *node = &t->root;
+    trie_node_t *node = t->root;
     for (const char* s=key; *s; ++s) {
         assert(ISALPHA(*s));
         char k = tolower(*s);
@@ -114,16 +122,47 @@ trie_node_t* trie_search_(trie_node_t *root, const char *key)
  
 int trie_exists(trie_t *t, const char *key)
 {
-    trie_node_t* node = trie_search_(&t->root, key);
+    trie_node_t* node = trie_search_(t->root, key);
     return (node != NULL && node->is_end_of_word);
 }
 
 void* trie_find(trie_t *t, const char *key)
 {
-    trie_node_t* node = trie_search_(&t->root, key);
+    trie_node_t* node = trie_search_(t->root, key);
     if (!node || !node->is_end_of_word)
         return NULL;
     return node->data;
+}
+
+void trie_destroy(trie_t **t, void (* cleanup)(void*))
+{
+    trie_node_t* node = (*t)->root;
+    int level = 0;
+    while(node) {
+        int i;
+        i = 0;
+        for (; i<ALPHABET_SIZE; ++i) {
+            if (node->children[i]) {
+                trie_node_t* temp = node->children[i];
+                node->children[i] = NULL;
+                node = temp;
+                ++level;
+                i = 0;
+            }
+        }
+
+        if (cleanup && node->is_end_of_word)
+            cleanup(node->data);
+
+        trie_node_t *p = node->parent;
+        // printf("FREE %p {%c} lvl=%d\n", node, node->character, level);
+        free(node);
+        node = p;
+        --level;
+    }
+
+    free(*t);
+    *t = NULL;
 }
 
 static
@@ -162,7 +201,7 @@ int trie_has_children_(trie_node_t* node)
 void* trie_remove(trie_t *t, const char *key)
 {
     void* data = NULL;
-    trie_node_t* node = trie_search_(&t->root, key);
+    trie_node_t* node = trie_search_(t->root, key);
 
     if (node == NULL)
         return NULL;
@@ -184,7 +223,7 @@ void* trie_remove(trie_t *t, const char *key)
 trie_iterator_t* trie_dfs_iterator(trie_t* trie)
 {
     trie_iterator_t* it = &trie->iter;
-    it->current = &trie->root;
+    it->current = trie->root;
     it->level = 0;
     return it;
 }
@@ -214,22 +253,32 @@ void trie_iterator_destroy(trie_iterator_t *it)
 }
 
 
+void trie_to_dot(trie_t* t)
+{
+
+    trie_node_t* next = t->root;
+    int level = 0;
+    printf("digraph graphname {\n");
+    while (next) {
+        char id[50];
+        char label[10];
+        sprintf(label, next == t->root ? "root%d" : "%c", next->character);
+        sprintf(id, "n%p", next);
+        printf("p%p [label=%s%s];\n", next, label, 
+            next->is_end_of_word ? ",shape=box,style=filled,fillcolor=sienna" : "");
+        for (int i=0; i<ALPHABET_SIZE; ++i) {
+            if (next->children[i])
+                printf("p%p -> p%p;\n", next, next->children[i]);
+        }
+        next = trie_dfs_next_(next, &level);
+    }
+
+    printf("}\n");
+}
+
 
 #if 0
 
-static
-void trie_print_(trie_t* t)
-{
-    char str[100];
-    int level = 0;
-    for (trie_node_t* r=trie_dfs_next_(&t->root, &level); r; r = trie_dfs_next_(r, &level)) {
-        str[level-1] = r->character;
-        str[level] = '\0';
-        for (int i=0; i<level; ++i)
-            printf(" ");
-        printf("%s%s\n", str, r->is_end_of_word ? " *" : "");
-    }
-}
 
 // Driver
 int main()
@@ -248,7 +297,7 @@ int main()
     for (i = 0; i < ARRAY_SIZE(keys); i++) {
         void* data = trie_find(t, keys[i]);
         if (data != NULL) {
-            printf("%s has already been added as '%s'\n", keys[i], data);
+            // printf("%s has already been added as '%s'\n", keys[i], data);
         }
         else
             trie_insert(t, keys[i], my_strdup( keys[i] ));
@@ -259,14 +308,32 @@ int main()
     if (k) free(k);
 
 
-    printf("Now the tree contains %d elements:\n", t->count);
-    trie_iterator_t it = trie_dfs_iterator(t);
-    for (void* n = trie_iterator_next(&it); n; n = trie_iterator_next(&it)) {
+    /*
+     printf("Now the tree contains %d elements:\n", t->count);
+    trie_iterator_t* it = trie_dfs_iterator(t);
+    for (void* n = trie_iterator_next(it); n; n = trie_iterator_next(it)) {
         printf("\t%s\n", n);
     }
+    */
 
-    printf("The complete trie is:\n");
-    trie_print_(t);
+    // printf("The complete trie is:\n");
+    //trie_to_dot(t);
+
+
+    trie_node_t* next = t->root;
+    int level = 0;
+    char line[100];
+    while (1) {
+        next = trie_dfs_next_(next, &level);
+        if (!next)
+            break;
+        line[level-1] = next->character;
+        line[level] = '\0';
+
+        for (int j=0; j<level; ++j)
+            printf(" ");
+        printf("%s\n", line);
+    }
 
     // Search for different keys
     printf("%s --- %s\n", "the", output[trie_exists(t, "the")] );
@@ -279,6 +346,7 @@ int main()
     printf("Size of Trie node : %zu\n", sizeof(trie_node_t));
 
 
+    trie_destroy(&t, NULL);
     return 0;
 }
 #endif

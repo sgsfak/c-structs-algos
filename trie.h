@@ -6,6 +6,9 @@ typedef struct trie_t trie_t;
 typedef struct trie_iterator_t trie_iterator_t;
 
 trie_t *trie_create(void);
+void trie_destroy(trie_t **t, void (* cleanup)(void*));
+
+
 int trie_count(trie_t *t);
 
 /* this function inserts a `key` in the Trie with the given `data`
@@ -46,4 +49,7 @@ void* trie_iterator_next(trie_iterator_t* it);
  */
 void trie_iterator_destroy(trie_iterator_t* it);
 
+
+
+void trie_to_dot(trie_t* t);
 #endif
