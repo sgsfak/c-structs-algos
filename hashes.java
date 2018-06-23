@@ -5,7 +5,7 @@ import java.util.stream.*;
 class hashes {
     public static void main(String a[]) throws IOException
     {
-        HashMap<String,Object> hs = new HashMap<>();
+        HashMap<String,Integer> hs = new HashMap<>();
         long startTime = System.currentTimeMillis();
         List<String> lines = Files.readAllLines(Paths.get("book.txt"), java.nio.charset.StandardCharsets.ISO_8859_1);
         List<String> words = lines.stream()
@@ -19,11 +19,17 @@ class hashes {
 
         startTime = System.currentTimeMillis();
         for (String s: words) {
-                hs.put(s, null);
+                hs.compute(s, (k,v) -> v==null ? 1 : v+1);
         }
         endTime = System.currentTimeMillis();
 
         System.out.println("Hashed " + hs.size() + " words in " + (endTime-startTime) + "ms");
+
+        startTime = System.nanoTime();
+        Integer k = hs.get("the");
+        endTime = System.nanoTime();
+
+        System.out.println("checking for existence of 'the' (found:" + k+ "), latency="+ (endTime-startTime)/1000000.0+ "ms");
 
 
     }

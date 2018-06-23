@@ -5,6 +5,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stddef.h>
 
     /*
      * the type of the keys : C strings
@@ -67,6 +68,9 @@ extern "C" {
 
     void ht_traverse_ordered(lch_hmap_t* ht, 
             int (*action) (lch_key_t, lch_value_t, void*), void* arg);
+
+    void ht_clear(lch_hmap_t* ht, 
+        void (*destroy_val_fn) (lch_value_t));
 
     /*
      * Destroys/deallocates the hashmap. If destroy_val_fn is not NULL

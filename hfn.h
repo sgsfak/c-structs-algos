@@ -51,6 +51,8 @@ extern "C"
     uint32_t jen_hash(const char *k, size_t length);
     uint32_t elf_hash(const char *key, size_t len);
 
+    uint32_t berkeley_hash(const char *s, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

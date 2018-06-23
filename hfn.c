@@ -174,3 +174,18 @@ uint32_t oat_hash(const char *s, size_t len)
     return h;
 }
 
+
+/*
+ * Berkeley hash
+ */
+uint32_t berkeley_hash(const char *s, size_t len)
+{
+    unsigned char *p = (unsigned char*) s;
+    uint32_t h = 0;
+
+    while(len--) {
+        h = *p++ + (h << 6) + (h << 16) - h;
+    }
+    return h;
+}
+

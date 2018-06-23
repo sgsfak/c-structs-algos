@@ -8,12 +8,12 @@
 #include "lch_hmap.h"
 
 typedef struct lch_hmap_entry {
-    char* key;
-    lch_value_t val;
-    uint32_t hash; /* the hash of the key, cached */
     struct lch_hmap_entry* next;
     struct lch_hmap_entry* older; /* Entry inserted/accessed prior to this one */
     struct lch_hmap_entry* newer; /* Entry inserted/accessed after this one */
+    lch_value_t val;
+    uint32_t hash; /* the hash of the key, cached */
+    char key[];
 } lch_hmap_entry_t;
 
 typedef struct {
@@ -25,6 +25,7 @@ typedef uint32_t (*hfn_t)(const char*, size_t);
 struct lch_hmap  {
     unsigned int n; /* current number of elements (entries) */
     uint32_t size; /* number of buckets */
+    bool ordered;
     unsigned int max_bucket_size;
     unsigned long long generation;
     hfn_t hfn;
@@ -176,25 +177,28 @@ lch_hmap_t* ht_create(uint32_t initial_size, hfn_t hfn)
     }
     h->size = _next_prime_for_expand(initial_size);
     h->hfn = hfn;
-    h->table = calloc(HASH_SIZE(h), sizeof(lch_hmap_bucket));
+    h->table = calloc(h->size, sizeof(lch_hmap_bucket));
     if (h->table == NULL) {
         perror("ht_create");
         free(h);
         return NULL;
     }
+    h->ordered = 1;
     /* printf("Hashtable created with size %u\n", HASH_SIZE(h)); */
     return h;
 }
 
 static lch_hmap_entry_t* _ht_entry_create(lch_hmap_t* ht, const char* word, uint32_t h)
 {
-    lch_hmap_entry_t* e = calloc(1, sizeof *e);
+    size_t word_len = strlen(word);
+    lch_hmap_entry_t* e = calloc(1, sizeof(lch_hmap_t) + word_len + 1);
+
     if (!e) {
         perror("_ht_entry_create");
         return NULL;
     }
-    e->key = strdup(word);
     e->hash = h;
+    memcpy(e->key, word, word_len+1);
     return e;
 }
 
@@ -202,7 +206,6 @@ static void _ht_entry_destroy(lch_hmap_t* ht, lch_hmap_bucket* he,
         void (*destroy_val_fn)(lch_value_t))
 {
     for(lch_hmap_entry_t* t = he->e; t; ) {
-        free(t->key);
         if (destroy_val_fn != NULL)
             destroy_val_fn(t->val);
         lch_hmap_entry_t* tnext = t->next;
@@ -219,6 +222,13 @@ void ht_destroy(lch_hmap_t* ht, void (*destroy_val_fn) (lch_value_t))
     for_each_lch_bucket(ht,e) _ht_entry_destroy(ht, e, destroy_val_fn);
     free(ht->table);
     free(ht);
+}
+
+void ht_clear(lch_hmap_t* ht, void (*destroy_val_fn) (lch_value_t))
+{
+    lch_hmap_bucket* e;
+    for_each_lch_bucket(ht,e)
+        _ht_entry_destroy(ht, e, destroy_val_fn);
 }
 
 void ht_traverse(lch_hmap_t* ht,
@@ -257,21 +267,12 @@ float ht_load_factor(lch_hmap_t* h)
     return h->n*1.0/HASH_SIZE(h);
 }
 
-/*
-static lch_hmap_bucket* ht_key_to_bucket(lch_hmap_t* ht, const char* word)
-{
-    uint32_t h = ht->hfn(word, strlen(word));
-    lch_hmap_bucket* b = ht_hash_to_bucket(ht, h);
-    return b;
-}
-*/
-
 static void _ht_insert_entry(lch_hmap_t* ht, lch_hmap_bucket* bucket,
         lch_hmap_entry_t* e);
 static void _ht_rehash(lch_hmap_t* ht)
 {
     uint32_t newSize = _next_prime_for_expand(2*HASH_SIZE(ht));
-    /* printf("Current load factor %4.2f.. (max bkt size=%u) rehashing to %u ..\n", ht_load_factor(ht), ht->max_bucket_size, newSize); */
+    /* printf("Current load factor %4.2f.. (size=%u, N=%u, max bkt size=%u) rehashing to %u ..\n", ht_load_factor(ht), ht->size, ht->n, ht->max_bucket_size, newSize); */
     lch_hmap_t* hnew = ht_create(newSize, ht->hfn);
     if (!hnew)
         return;
@@ -294,13 +295,6 @@ static void _ht_rehash(lch_hmap_t* ht)
 }
 static void _ht_insert_entry(lch_hmap_t* ht, lch_hmap_bucket* bucket, lch_hmap_entry_t* e)
 {
-    uint32_t size = HASH_SIZE(ht);
-    unsigned int n = ht->n;
-    if (n + 1 > (3*size >> 2)) { // USe the 0.75 factor
-        /* We need to rehash ... */
-        _ht_rehash(ht);
-    }
-
     bucket->len++;
     e->next = bucket->e;
     bucket->e = e;
@@ -323,15 +317,17 @@ void ht_delete(lch_hmap_t* ht, const char* word)
         if (h == t->hash && strcmp(t->key, word) == 0) {
             *e = t->next;
 
-            if (t->newer == t) {
-                /* The element to be deleted is the last one! */
-                ht->first = NULL;
-            }
-            else {
-                t->newer->older = t->older;
-                t->older->newer = t->newer;
-                if (ht->first == t)
-                    ht->first = t->newer;
+            if (ht->ordered) {
+                if (t->newer == t) {
+                    /* The element to be deleted is the last one! */
+                    ht->first = NULL;
+                }
+                else {
+                    t->newer->older = t->older;
+                    t->older->newer = t->newer;
+                    if (ht->first == t)
+                        ht->first = t->newer;
+                }
             }
             free(t->key);
             free(t);
@@ -372,18 +368,27 @@ lch_value_t* ht_put(lch_hmap_t* ht, const char* word)
     e = _ht_entry_create(ht, word, h);
     if (!e)
         return NULL;
-    _ht_insert_entry(ht, b, e);
-    if (ht->first) {
-        lch_hmap_entry_t* tail = ht->first->older;
-        e->older = tail;
-        e->newer = tail->newer;
-        tail->newer->older = e;
-        tail->newer = e;
+
+    if (ht->n + 1 > (3*ht->size >> 2)) { // Use the 0.75 factor
+        /* We need to rehash ... */
+        _ht_rehash(ht);
+        b = ht_hash_to_bucket(ht, h);
     }
-    else {
-        e->older = e;
-        e->newer = e;
-        ht->first = e;
+
+    _ht_insert_entry(ht, b, e);
+    if (ht->ordered) {
+        if (ht->first) {
+            lch_hmap_entry_t* tail = ht->first->older;
+            e->older = tail;
+            e->newer = tail->newer;
+            tail->newer->older = e;
+            tail->newer = e;
+        }
+        else {
+            e->older = e;
+            e->newer = e;
+            ht->first = e;
+        }
     }
 
     return &e->val;

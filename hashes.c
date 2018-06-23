@@ -69,7 +69,8 @@ vec_entry* parseFile(const char* fn)
 
     while ((len = getline(&word, &linecap, fp)) != -1) {
         word[len-1] = '\0';
-        const char* sep = " \t\n\x0B\f\r\"'.,();!-:?&|^&";
+        /* const char* sep = " \t\n\x0B\f\r\"'.,();!-:?&|^&"; */
+        const char* sep = " \t\n\x0B\f\r";
         for (char* str = strtok(word, sep); str ; str = strtok(NULL, sep)) {
             vec_entry e;
             e.p = strdup(str);
@@ -117,6 +118,9 @@ int main(int argc, char* argv[])
             case 7:
                 hfn = jen_hash;
                 break;
+            case 8:
+                hfn = berkeley_hash;
+                break;
             default:
                 break;
         }
@@ -124,7 +128,7 @@ int main(int argc, char* argv[])
 
     vec_entry* lines = parseFile("book.txt");
 
-    lch_hmap_t* ht = ht_create(116732, hfn);
+    lch_hmap_t* ht = ht_create(701, hfn);
     float startTime = (float)clock()/CLOCKS_PER_SEC;
     int k, n = vec_length(lines);
     for(k = 0; k<n; ++k) {
@@ -150,7 +154,7 @@ int main(int argc, char* argv[])
 
     struct max_freq tt = {0};
     startTime = (float)clock()/CLOCKS_PER_SEC;
-    ht_traverse_ordered(ht, find_max, &tt);
+    ht_traverse(ht, find_max, &tt);
     endTime = (float)clock()/CLOCKS_PER_SEC;
     printf("Max frequency: %ld for word: '%s' (latency: %.3f ms)\n", tt.freq, tt.key, 1000*(endTime-startTime));
     startTime = (float)clock()/CLOCKS_PER_SEC;
@@ -159,8 +163,10 @@ int main(int argc, char* argv[])
     printf("checking for existence latency: %.3f ms\n", 1000*(endTime-startTime));
 
 
-    int nn = 0;
-    ht_traverse_ordered(ht, print_entries, &nn);
+    /*
+        int nn = 0;
+        ht_traverse_ordered(ht, print_entries_head, &nn);
+    */
 
     ht_destroy(ht, NULL);
 
