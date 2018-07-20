@@ -65,7 +65,7 @@ uint32_t elf_hash(const char *key, size_t len)
 {
     unsigned char *p = (unsigned char*) key;
     uint32_t h = 0, g;
-    int i;
+    size_t i;
 
     for (i = 0; i < len; i++)
     {

@@ -121,7 +121,7 @@ static uint32_t _primes[] = {
  */
 #define lch_fast_mod32(x,N) (((uint64_t) (x) * (uint64_t) (N)) >> 32)
 
-static inline uint32_t mod_hash_size(lch_hmap_t* ht, uint32_t k)
+static uint32_t mod_hash_size(lch_hmap_t* ht, uint32_t k)
 {
     switch (ht->size) {
         case _HSH_P0:  return k % _HSH_P0; 
@@ -369,7 +369,7 @@ lch_value_t* ht_put(lch_hmap_t* ht, const char* word)
     if (!e)
         return NULL;
 
-    if (ht->n + 1 > (3*ht->size >> 2)) { // Use the 0.75 factor
+    if (ht->n + 1 > (3*ht->size >> 2)) { /* Use the 0.75 factor */
         /* We need to rehash ... */
         _ht_rehash(ht);
         b = ht_hash_to_bucket(ht, h);

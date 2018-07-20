@@ -26,10 +26,10 @@ struct mtqueue {
 
 mtqueue_t* mtq_init(int size, int max_workers)
 {
-    mtqueue_t* q = calloc(sizeof(mtqueue_t), 1);
+    mtqueue_t* q = calloc(1, sizeof(mtqueue_t));
     if (q == NULL)
         return NULL;
-    q->data = calloc(sizeof(void*), size);
+    q->data = calloc(size, sizeof(void*));
     if (q->data == NULL) {
         free(q);
         return NULL;

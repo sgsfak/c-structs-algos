@@ -129,7 +129,7 @@ static uint32_t _primes[] = {
  */
 #define lch_fast_mod32(x,N) (((uint64_t) (x) * (uint64_t) (N)) >> 32)
 
-static inline uint32_t mod_hash_size(lch_hmap_t* ht, uint32_t k)
+static uint32_t mod_hash_size(lch_hmap_t* ht, uint32_t k)
 {
     switch (ht->size) {
         case _HSH_P0:  return k % _HSH_P0; 
@@ -168,7 +168,7 @@ static inline uint32_t mod_hash_size(lch_hmap_t* ht, uint32_t k)
 }
 #define ht_hash_to_bucket(ht,h)  ((ht)->table[mod_hash_size((ht), (h))])
 
-static inline uint32_t _next_prime_for_expand(uint32_t minSize)
+static uint32_t _next_prime_for_expand(uint32_t minSize)
 {
     uint32_t* p;
 
@@ -195,7 +195,7 @@ lch_hmap_t* ht_create(uint32_t initial_size, hfn_t hfn)
     return h;
 }
 
-static inline void _ht_destroy_entries(lch_hmap_bucket_t* bkt,
+static void _ht_destroy_entries(lch_hmap_bucket_t* bkt,
         void (*destroy_val_fn) (lch_value_t))
 {
     while(bkt) {
@@ -264,7 +264,7 @@ float ht_load_factor(lch_hmap_t* h)
    }
    */
 
-static inline lch_value_t* _ht_insert_entry(lch_hmap_bucket_t* b, uint32_t hash, char* word)
+static lch_value_t* _ht_insert_entry(lch_hmap_bucket_t* b, uint32_t hash, char* word)
 {
     /*
      * There are two cases:
@@ -394,8 +394,8 @@ lch_value_t* ht_get(lch_hmap_t* ht, const char* word)
 
 lch_value_t* ht_put(lch_hmap_t* ht, const char* word)
 {
-    if (ht->n + 1 > (3*ht->size >> 2)) { // USe the 0.75 factor
-        // We need to rehash ...
+    if (ht->n + 1 > (3*ht->size >> 2)) { /* Use the 0.75 factor */
+        /* We need to rehash ... */
         _ht_rehash(ht);
     }
     ht->generation++;

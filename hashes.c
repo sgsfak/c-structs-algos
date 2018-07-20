@@ -27,7 +27,24 @@ int find_max(lch_key_t key, lch_value_t e, void * arg)
     return 0;
 }
 
-int print_entries(lch_key_t key, lch_value_t e, void * arg)
+/*
+*  Suppress nuisance compiler warnings. Yes, each compiler can already 
+*  do this, each differently! VC9 has its UNREFERENCED_PARAMETER(),
+*  which is almost the same as the SUPPRESS_UNUSED_WARNING() below.
+*
+*  We append _UNUSED to the variable name, because the dumb gcc compiler
+*  doesn't bother to tell you if you erroneously _use_ something flagged
+*  with __attribute__((unused)). So we are forced to *mangle* the name.
+*/
+#if defined(__cplusplus)
+#define UNUSED(x)       // = nothing
+#elif defined(__GNUC__)
+#define UNUSED(x)       x##_UNUSED __attribute__((unused))
+#else
+#define UNUSED(x)       x##_UNUSED
+#endif
+
+int print_entries(lch_key_t key, lch_value_t e, void* UNUSED(arg))
 {
     printf("%s\t%ld\n", key, e.l);
     return 0;
@@ -152,7 +169,7 @@ int main(int argc, char* argv[])
             stats.max_bucket_size,
             (double) usage.ru_maxrss/(1024.0 * 1024.0));
 
-    struct max_freq tt = {0};
+    struct max_freq tt = {};
     startTime = (float)clock()/CLOCKS_PER_SEC;
     ht_traverse(ht, find_max, &tt);
     endTime = (float)clock()/CLOCKS_PER_SEC;

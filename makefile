@@ -1,5 +1,5 @@
 CC=cc
-CFLAGS=-O2 -Wall -std=c99
+CFLAGS=-O2 -Wall -Wextra -ansi
 
 CFLAGS += -MMD -MP
 SRC = $(wildcard *.c)

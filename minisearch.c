@@ -103,20 +103,21 @@ int main(int argc, char* argv[])
         printf("\n---------------------------------------------------------------------------------\n");
         printf("%s [%d occurrences]\n", n->word, n->occurences);
         char prefix[30];
-        for (int k=0; k<n->occurences; ++k) {
+        int k, j;
+        for (k=0; k<n->occurences; ++k) {
             word_pos_t pos = n->positions[k];
             snprintf(prefix, sizeof prefix - 1, "%d: ", pos.line_nbr);
             printf("%s%s", prefix, pos.line);
             int spaces = pos.pos + strlen(prefix);
-            for (int j=0; j<spaces; ++j) printf(" ");
-            for (int j=0; j<n->word_len; ++j) printf("^");
+            for (j=0; j<spaces; ++j) printf(" ");
+            for (j=0; j<n->word_len; ++j) printf("^");
             printf("\n");
         }
     }
     trie_iterator_destroy(it);
 
 
-    // trie_to_dot(dic);
+    /* trie_to_dot(dic); */
     trie_destroy(&dic, free_word_info);
 
     for (int i=0; i<total_lines; ++i)
