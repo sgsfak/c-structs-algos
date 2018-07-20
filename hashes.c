@@ -175,9 +175,9 @@ int main(int argc, char* argv[])
     endTime = (float)clock()/CLOCKS_PER_SEC;
     printf("Max frequency: %ld for word: '%s' (latency: %.3f ms)\n", tt.freq, tt.key, 1000*(endTime-startTime));
     startTime = (float)clock()/CLOCKS_PER_SEC;
-    ht_contains(ht, "the");
+    lch_value_t* v = ht_get(ht, "the");
     endTime = (float)clock()/CLOCKS_PER_SEC;
-    printf("checking for existence latency: %.3f ms\n", 1000*(endTime-startTime));
+    printf("checking for existence of 'of' latency: %.3f ms Found %ld\n", 1000*(endTime-startTime), v->l);
 
 
     /*
