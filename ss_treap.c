@@ -142,24 +142,31 @@ ss_treap_node* ss_treap_insert_node(ss_treap* treap,
     return p;
 }
 static
-ss_treap_node* ss_treap_join(ss_treap* treap, ss_treap_node* a, ss_treap_node* b)
+ss_treap_node* ss_treap_merge_children(ss_treap* treap, ss_treap_node* node)
 {
-    if (a == NULL)
-        return b;
-    if (b == NULL)
-        return a;
-    ss_treap_node* root = a;
-    ss_treap_node* child = b;
-    if (b->priority > a->priority) {
-        root = b;
-        child = a;
+    if (node->left == NULL && node->right == NULL)
+        return NULL;
+
+    if (node->left == NULL)
+        return node->right;
+
+    if (node->right == NULL)
+        return node->left;
+
+    ss_treap_node* p = node->left->priority > node->right->priority ? node->left : node->right;
+
+    if (p == node->left) {
+        /* Right rotation */
+        node->left = p->right;
+        p->right = ss_treap_merge_children(treap, node);
     }
-    int k = treap->compar(child->val, root->val);
-    if (k < 0)
-        root->left = ss_treap_join(treap, root->left, child);
-    else
-        root->right = ss_treap_join(treap, root->right, child);
-    return root;
+    else {
+        /* Left rotation */
+        node->right = p->left;
+        p->left = ss_treap_merge_children(treap, node);
+    }
+
+    return p;
 }
 
 static
@@ -179,7 +186,7 @@ ss_treap_node* ss_treap_delete_node(ss_treap* treap, ss_treap_node* node, void* 
         return node;
     }
 
-    ss_treap_node* p = ss_treap_join(treap, node->right, node->left);
+    ss_treap_node* p = ss_treap_merge_children(treap, node);
     free(node);
     treap->n--;
     return p;
