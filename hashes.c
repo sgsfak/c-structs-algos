@@ -174,10 +174,11 @@ int main(int argc, char* argv[])
     ht_traverse(ht, find_max, &tt);
     endTime = (float)clock()/CLOCKS_PER_SEC;
     printf("Max frequency: %ld for word: '%s' (latency: %.3f ms)\n", tt.freq, tt.key, 1000*(endTime-startTime));
+    char word[] = "The";
     startTime = (float)clock()/CLOCKS_PER_SEC;
-    lch_value_t* v = ht_get(ht, "the");
+    lch_value_t* v = ht_get(ht, word);
     endTime = (float)clock()/CLOCKS_PER_SEC;
-    printf("checking for existence of 'of' latency: %.3f ms Found %ld\n", 1000*(endTime-startTime), v->l);
+    printf("checking for existence of '%s' latency: %.3f ms Found %ld\n", word, 1000*(endTime-startTime), v->l);
 
 
     /*
