@@ -1,13 +1,5 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include "ss_pairing_heap.h"
-
-static
-void panic(const char* msg)
-{
-    fprintf(stderr, "%s\n", msg);
-    exit(EXIT_FAILURE);
-}
 
 void ss_pairing_init(ss_pairing_heap* h)
 {
@@ -15,9 +7,9 @@ void ss_pairing_init(ss_pairing_heap* h)
     h->root = NULL;
 }
 
-void* ss_pairing_find_min(ss_pairing_heap* h)
+ss_pairing_node* ss_pairing_find_min(ss_pairing_heap* h)
 {
-    return h->root ? h->root->data : NULL;
+    return h->root;
 }
 
 static
@@ -54,8 +46,9 @@ ss_pairing_node* merge_nodes(ss_pairing_node* h1, ss_pairing_node* h2)
 static
 ss_pairing_node* link(ss_pairing_node* head)
 {
-    ss_pairing_node *current, *next;
+    ss_pairing_node *current, *next, *prev;
 
+    prev = head->prev;
     /* 
     1st pass:
 
@@ -84,28 +77,18 @@ ss_pairing_node* link(ss_pairing_node* head)
         head = merge_nodes(head, head->next);
         head->next = next;
     }
+    head->prev = prev;
     return head;
 }
 
-ss_pairing_node* ss_pairing_insert_node(ss_pairing_heap* h, ss_pairing_node* node)
+void ss_pairing_insert(ss_pairing_heap* h, ss_pairing_node* node, int pri)
 {
-    h->root = merge_nodes(h->root, node);
+    node->pri   = pri;
+    node->prev  = NULL;
+    node->next  = NULL;
+    node->child = NULL;
+    h->root     = merge_nodes(h->root, node);
     h->size++;
-    return node;
-}
-
-ss_pairing_node* ss_pairing_insert(ss_pairing_heap* h, void* data, int pri)
-{
-
-    ss_pairing_node* node;
-
-    node = malloc(sizeof *node);
-    if (node == NULL) {
-        panic("malloc returned NULL. Out of memory?");
-    }
-    SS_PAIRING_NODE_INIT(node,pri,data);
-    ss_pairing_insert_node(h, node);
-    return node;
 }
 
 ss_pairing_heap* ss_pairing_merge(ss_pairing_heap* h1, ss_pairing_heap* h2)
@@ -127,7 +110,7 @@ void ss_pairing_delete(ss_pairing_heap* h, ss_pairing_node* item)
         h->root = link(item->child);
     }
     else {
-        if (item->prev == item->prev->child)
+        if (item == item->prev->child)
             item->prev->child = item->next;
         else
             item->prev->next = item->next;
@@ -136,18 +119,19 @@ void ss_pairing_delete(ss_pairing_heap* h, ss_pairing_node* item)
 
         h->root = merge_nodes(h->root, link(item->child));
     }
-    free(item);
+    item->prev = NULL;
+    item->next = NULL;
     h->size--;
 }
 
-void ss_pairing_decrease_pri(ss_pairing_heap* h, ss_pairing_node* item, int new_pri)
+void ss_pairing_update_pri(ss_pairing_heap* h, ss_pairing_node* item, int new_pri)
 {
     if (new_pri < item->pri) {
         item->pri = new_pri;
         if (h->root == item)
             return;
 
-        if (item->prev == item->prev->child)
+        if (item == item->prev->child)
             item->prev->child = item->next;
         else
             item->prev->next = item->next;
@@ -159,13 +143,37 @@ void ss_pairing_decrease_pri(ss_pairing_heap* h, ss_pairing_node* item, int new_
         h->root = merge_nodes(h->root, item);
     }
     else {
-        
+        item->pri = new_pri;
+        ss_pairing_node* r = link(item->child);
+        item->child = NULL;
+        if (item == h->root)
+            h->root = merge_nodes(h->root, r);
+        else {
+            ss_pairing_node* prev = item->prev;
+            ss_pairing_node* next = item->next;
+            r = merge_nodes(item, r);
+            r->prev = prev;
+            r->next = next;
+            if (prev->child == item)
+                prev->child = r;
+            else
+                prev->next = r;
+            if (next != NULL)
+                next->prev = r;
+        }
+
+        /*
+           Another way: Delete and Re-insert item:
+
+        ss_pairing_delete(h, item);
+        ss_pairing_insert(h, item, new_pri);
+        */
     }
 }
 
-void* ss_pairing_extract_min(ss_pairing_heap* h)
+ss_pairing_node* ss_pairing_extract_min(ss_pairing_heap* h)
 {
-    void* data = ss_pairing_find_min(h);
-    ss_pairing_delete(h, h->root);
-    return data;
+    ss_pairing_node* node = h->root;
+    ss_pairing_delete(h, node);
+    return node;
 }
