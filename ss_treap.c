@@ -8,19 +8,8 @@
 #ifdef NDEBUG
 #define log(...)
 #else
-#define log(...) fprintf (stderr, __VA_ARGS__)
+#define log(...) fprintf (stdout, __VA_ARGS__)
 #endif
-
-/* From http://nullprogram.com/blog/2017/09/21/ */
-static
-uint32_t spcg32(uint64_t s[1])
-{
-    uint64_t m = 0x9b60933458e17d7d;
-    uint64_t a = 0xd737232eeccdf7ed;
-    *s = *s * m + a;
-    int shift = 29 - (*s >> 61);
-    return *s >> shift;
-}
 
 typedef struct ss_treap_prng_state {
     uint32_t a;
@@ -55,88 +44,54 @@ void jsf32_init( jsf32_state *x, uint32_t seed ) {
 
 void ss_treap_init(ss_treap* treap)
 {
+    static struct ss_treap_prng_state* rng;
     treap->root = NULL;
     treap->n = treap->max_height = 0;
 
-    treap->random_seed = calloc(1, sizeof(struct ss_treap_prng_state));
-    jsf32_init(treap->random_seed, 1u);
-}
-
-static
-void ss_treap_destroy_node(ss_treap_node* p)
-{
-    if (p->left)
-        ss_treap_destroy_node(p->left);
-    if (p->right)
-        ss_treap_destroy_node(p->right);
-    free(p);
-}
-
-void ss_treap_destroy(ss_treap* treap)
-{
-    if (treap) {
-        if (treap->root) {
-            ss_treap_destroy_node(treap->root);
-            treap->root = NULL;
-        }
-        free(treap->random_seed);
+    if (!rng) {
+        rng = calloc(1, sizeof(struct ss_treap_prng_state));
+        jsf32_init(rng, 42u);
     }
+    treap->random_seed = rng;
 }
 
 
-static
-ss_treap_node* ss_treap_node_new(void* val, uint32_t pri)
-{
-    ss_treap_node* p = malloc(sizeof *p);
-    p->left = p->right = NULL;
-    p->priority = pri;
-    p->val = val;
-    return p;
-}
-
-static
 ss_treap_node* ss_treap_insert_node(ss_treap* treap,
-        ss_treap_node* node, 
-        void* val, uint32_t priority, int depth)
+        ss_treap_node* current, ss_treap_node* node)
 {
-    log("...Now at %p\n", node);
-    if (node == NULL) {
-        depth++;
-        if (treap->max_height < depth)
-            treap->max_height = depth;
+    log("...Now at %p\n", current);
+    if (current == NULL) {
         treap->n++;
-        return ss_treap_node_new(val, priority);
+        return node;
     }
 
-    log("...Comparing %p with %p\n", node->val, val);
-    int k = treap->compar(node->val, val);
+    log("...Comparing %p with %p\n", current, node);
+    int k = treap->compar(current, node);
     if (k < 0) {
-        depth++;
-        node->right = ss_treap_insert_node(treap, node->right, val, priority, depth);
+        current->right = ss_treap_insert_node(treap, current->right, node);
     }
     else if (k > 0) {
-        depth++;
-        node->left = ss_treap_insert_node(treap, node->left, val, priority, depth);
+        current->left = ss_treap_insert_node(treap, current->left, node);
     }
     else {
-        node->priority = priority;
+        return current;
     }
-    ss_treap_node* p = node;
-    if (node->left != NULL && node->left->priority > p->priority)
-        p = node->left;
-    if (node->right != NULL && node->right->priority > p->priority)
-        p = node->right;
+    ss_treap_node* p = current;
+    if (current->left != NULL && current->left->priority > p->priority)
+        p = current->left;
+    if (current->right != NULL && current->right->priority > p->priority)
+        p = current->right;
 
 
-    if (p == node->left) {
+    if (p == current->left) {
         /* Right rotation */
-        node->left = p->right;
-        p->right = node;
+        current->left = p->right;
+        p->right = current;
     }
-    else if (p == node->right) {
+    else if (p == current->right) {
         /* Left rotation */
-        node->right = p->left;
-        p->left = node;
+        current->right = p->left;
+        p->left = current;
     }
 
     return p;
@@ -170,40 +125,38 @@ ss_treap_node* ss_treap_merge_children(ss_treap* treap, ss_treap_node* node)
 }
 
 static
-ss_treap_node* ss_treap_delete_node(ss_treap* treap, ss_treap_node* node, void* val)
+ss_treap_node* ss_treap_delete_node(ss_treap* treap, ss_treap_node* current, ss_treap_node* node)
 {
-    if (node == NULL)
+    if (current == NULL)
         return NULL;
-    log("...Comparing %p with %p\n", node->val, val);
 
-    int k = treap->compar(node->val, val);
+    int k = treap->compar(current, node);
     if (k < 0) {
-        node->right = ss_treap_delete_node(treap, node->right, val);
-        return node;
+        current->right = ss_treap_delete_node(treap, current->right, node);
+        return current;
     }
     else if (k > 0) {
-        node->left = ss_treap_delete_node(treap, node->left, val);
-        return node;
+        current->left = ss_treap_delete_node(treap, current->left, node);
+        return current;
     }
 
-    ss_treap_node* p = ss_treap_merge_children(treap, node);
-    free(node);
+    ss_treap_node* p = ss_treap_merge_children(treap, current);
     treap->n--;
     return p;
 }
 
-void ss_treap_delete(ss_treap* treap, void* val)
+void ss_treap_delete(ss_treap* treap, ss_treap_node* node)
 {
-    treap->root = ss_treap_delete_node(treap, treap->root, val);
+    treap->root = ss_treap_delete_node(treap, treap->root, node);
 }
 
 
 static
-void ss_treap_node_to_dot(ss_treap* t, ss_treap_node* p, char* (*tostr)(void*))
+void ss_treap_node_to_dot(ss_treap* t, ss_treap_node* p, char* (*tostr)(const ss_treap_node*))
 {
 
     char label[200];
-    sprintf(label, "<left> | <name> %s:%u | <right>", tostr(p->val), p->priority);
+    snprintf(label, 200, "<left> | <name> %s:%u | <right>", tostr(p), p->priority);
     printf("n%p [label=\"%s\"];\n", p, label);
 
     if (p->left) {
@@ -217,7 +170,7 @@ void ss_treap_node_to_dot(ss_treap* t, ss_treap_node* p, char* (*tostr)(void*))
 
 }
 
-void ss_treap_to_dot(ss_treap* t, char* (*tostr)(void*))
+void ss_treap_to_dot(ss_treap* t, char* (*tostr)(const ss_treap_node*))
 {
 
     printf("digraph graphname {\n"
@@ -228,12 +181,12 @@ void ss_treap_to_dot(ss_treap* t, char* (*tostr)(void*))
     printf("}\n");
 }
 
-ss_treap_node* ss_treap_find(ss_treap* treap, const void* val)
+ss_treap_node* ss_treap_find(ss_treap* treap, ss_treap_node* node)
 {
     ss_treap_node* p = treap->root;
     while(p != NULL) {
         log("checking %p [pri=%u, left=%p, right=%p]\n", p, p->priority, p->left, p->right);
-        int k = treap->compar(p->val, val);
+        int k = treap->compar(p, node);
         if (k == 0)
             return p;
         if (k < 0) 
@@ -244,39 +197,34 @@ ss_treap_node* ss_treap_find(ss_treap* treap, const void* val)
     return NULL;
 }
 
-/*
-void ss_treap_update(ss_treap* treap, const void* val,
-        void (*update_cb)(const void* old_val, const void* val))
+void ss_treap_insert_pri(ss_treap* treap,
+        ss_treap_node* node, uint32_t priority)
 {
-    ss_treap_node* p = treap->root;
-    void* valp;
-    while(p) {
-        valp = TREAP_NODE_VAL(p);
-        int k = treap->compar(valp, val);
-        if (k < 0) 
-            p = p->left;
-        else if (k > 0)
-            p = p->right;
-        else 
-            update_cb(valp, val);
-    }
-}
-*/
 
-
-void ss_treap_insert_pri(ss_treap* treap, void* val, uint32_t priority)
-{
-    int depth = 1;
-    treap->root = ss_treap_insert_node(treap, treap->root, val, priority, depth);
-    log("HEIGHT=%d\n", treap->max_height);
-    /* ss_treap_to_dot(treap); */
+    node->left     = NULL;
+    node->right    = NULL;
+    node->priority = priority;
+    treap->root = ss_treap_insert_node(treap, treap->root, node);
 }
 
-void ss_treap_insert(ss_treap* treap, void* val)
+void ss_treap_insert(ss_treap* treap, ss_treap_node* node)
 {
-    uint32_t pri = jsf32(treap->random_seed) % 100;
-    /* uint32_t pri = spcg32(&treap->random_seed->a); */
+    uint32_t pri = jsf32(treap->random_seed);
     log("..priority=%u\n", pri);
-    ss_treap_insert_pri(treap, val, pri);
+    ss_treap_insert_pri(treap, node, pri);
+}
+
+int ss_treap_height_r(ss_treap_node* n)
+{
+    if (n == NULL)
+        return 0;
+    int hl = ss_treap_height_r(n->left);
+    int hr = ss_treap_height_r(n->right);
+
+    return (hr > hl ? hr : hl) + 1;
+}
+int ss_treap_height(ss_treap* treap)
+{
+    return ss_treap_height_r(treap->root);
 }
 
