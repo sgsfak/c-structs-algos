@@ -140,19 +140,6 @@ ss_avl_node* extract_leftmost(ss_avl_node* root, ss_avl_node**node)
     return root;
 }
 
-/*
-static
-ss_avl_node* extract_rightmost(ss_avl_node* root, ss_avl_node**node)
-{
-    if (root->right == NULL) {
-        *node = root;
-        return root->left;
-    }
-    root->right = extract_leftmost(root->right, node);
-    root = balance(root);
-    return root;
-}
-*/
 
 static
 ss_avl_node* ss_avl_join(ss_avl_node* root, ss_avl_node* left, ss_avl_node* right)
@@ -179,16 +166,17 @@ ss_avl_node* ss_avl_join(ss_avl_node* root, ss_avl_node* left, ss_avl_node* righ
 }
 
 static 
-ss_avl_node* ss_avl_delete_node(ss_avl_tree* avl, ss_avl_node* node, ss_avl_node* val)
+ss_avl_node* ss_avl_delete_node(ss_avl_tree* avl, ss_avl_node* node, ss_avl_node* val, ss_avl_node** found)
 {
     if (node == NULL)
         return NULL;
     int c = avl->compar(val, node);
     if (c < 0)
-        node->left = ss_avl_delete_node(avl, node->left, val);
+        node->left = ss_avl_delete_node(avl, node->left, val, found);
     else if (c > 0)
-        node->right = ss_avl_delete_node(avl, node->right, val);
+        node->right = ss_avl_delete_node(avl, node->right, val, found);
     else {
+        *found = node;
         if (node->right == NULL) {
             node = node->left;
         }
@@ -203,15 +191,19 @@ ss_avl_node* ss_avl_delete_node(ss_avl_tree* avl, ss_avl_node* node, ss_avl_node
             node->right = extract_leftmost(node->right, &succ);
             node = ss_avl_join(succ, node->left, node->right);
         }
-        avl->n--;
     }
     return balance(node);
 }
 
-void ss_avl_delete(ss_avl_tree* avl, ss_avl_node* val)
+ss_avl_node* ss_avl_delete(ss_avl_tree* avl, ss_avl_node* val)
 {
     assert(avl);
-    avl->root = ss_avl_delete_node(avl, avl->root, val);
+    ss_avl_node* node = NULL;
+    avl->root = ss_avl_delete_node(avl, avl->root, val, &node);
+    if (node != NULL)
+        avl->n--;
+    return node;
+
 }
 
 static

@@ -18,8 +18,8 @@ typedef struct {
 
 void ss_avl_init(ss_avl_tree* avl, int (*compar)(ss_avl_node* a, ss_avl_node* b));
 void ss_avl_insert(ss_avl_tree* avl, ss_avl_node* val);
-struct ss_avl_node* ss_avl_find(ss_avl_tree* avl, ss_avl_node* val);
-void ss_avl_delete(ss_avl_tree* avl, ss_avl_node* val);
+ss_avl_node* ss_avl_find(ss_avl_tree* avl, ss_avl_node* val);
+ss_avl_node* ss_avl_delete(ss_avl_tree* avl, ss_avl_node* val);
 
 #define ss_avl_height(avl) ((avl)->root ? (avl)->root->height : 0)
 
