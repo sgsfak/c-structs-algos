@@ -25,7 +25,7 @@ void ss_treap_insert(ss_treap* treap, ss_treap_node* val);
 void ss_treap_insert_pri(ss_treap* treap, ss_treap_node* val, uint32_t priority);
 struct ss_treap_node* ss_treap_find(ss_treap* treap, ss_treap_node* val);
 void ss_treap_delete(ss_treap* treap, ss_treap_node* val);
-void ss_treap_update(ss_treap* treap, ss_treap_node* val, uint32_t priority);
+void ss_treap_increase_pri(ss_treap* treap, ss_treap_node* node, uint32_t priority);
 
 void ss_treap_to_dot(ss_treap* t, char* (*tostr)(const ss_treap_node*));
 int ss_treap_height(ss_treap* treap);
