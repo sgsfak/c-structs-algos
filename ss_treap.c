@@ -1,7 +1,9 @@
 #include <stdlib.h>
-#include "ss_treap.h"
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
+#include "ss_treap.h"
+
 
 
 
@@ -42,17 +44,24 @@ void jsf32_init( jsf32_state *x, uint32_t seed ) {
     }
 }
 
+static struct ss_treap_prng_state* TREAP_PRNG_STATE;
+void ss_treap_init_rng(uint32_t seed)
+{
+
+    if (!TREAP_PRNG_STATE) {
+        TREAP_PRNG_STATE = calloc(1, sizeof(struct ss_treap_prng_state));
+    }
+    jsf32_init(TREAP_PRNG_STATE, seed);
+}
 void ss_treap_init(ss_treap* treap)
 {
-    static struct ss_treap_prng_state* rng;
     treap->root = NULL;
     treap->n = treap->max_height = 0;
 
-    if (!rng) {
-        rng = calloc(1, sizeof(struct ss_treap_prng_state));
-        jsf32_init(rng, 42u);
+    if (!TREAP_PRNG_STATE) {
+        ss_treap_init_rng(42u);
     }
-    treap->random_seed = rng;
+    treap->random_seed = TREAP_PRNG_STATE;
 }
 
 
@@ -64,7 +73,6 @@ ss_treap_node* ss_treap_insert_node(ss_treap* treap,
         return node;
     }
 
-    log("[INS] Comparing %p with %p\n", current, node);
     int k = treap->compar(current, node);
     if (k < 0) {
         current->right = ss_treap_insert_node(treap, current->right, node);
@@ -159,9 +167,8 @@ ss_treap_node* ss_treap_increase_node(ss_treap* treap,
     }
 
     int k = treap->compar(current, node);
-    log("[UPD] Comparing %p with %p (%s)\n", current, node, k == 0 ? "SAME!" : "differ");
     if (k == 0) {
-        log("[UPD] UPDATING priority of %p from %u to %u\n", current, current->priority, pri);
+        assert(pri > current->priority);
         current->priority = pri;
         return current;
     }
@@ -192,11 +199,13 @@ ss_treap_node* ss_treap_increase_node(ss_treap* treap,
 }
 
 static
-void ss_treap_node_to_dot(ss_treap* t, ss_treap_node* p, char* (*tostr)(const ss_treap_node*))
+void ss_treap_node_to_dot(ss_treap* t, ss_treap_node* p, char* (*tostr)(const ss_treap_node*, char label[], int n))
 {
 
+    char str[80];
     char label[200];
-    snprintf(label, 200, "<left> | <name> %s:%u | <right>", tostr(p), p->priority);
+    tostr(p, str, 80);
+    snprintf(label, 200, "<left> | <name> %s:%u | <right>", str, p->priority);
     printf("n%p [label=\"%s\"];\n", p, label);
 
     if (p->left) {
@@ -210,7 +219,7 @@ void ss_treap_node_to_dot(ss_treap* t, ss_treap_node* p, char* (*tostr)(const ss
 
 }
 
-void ss_treap_to_dot(ss_treap* t, char* (*tostr)(const ss_treap_node*))
+void ss_treap_to_dot(ss_treap* t, char* (*tostr)(const ss_treap_node*, char label[], int n))
 {
 
     printf("digraph graphname {\n"
@@ -250,7 +259,6 @@ void ss_treap_insert_pri(ss_treap* treap,
 void ss_treap_insert(ss_treap* treap, ss_treap_node* node)
 {
     uint32_t pri = jsf32(treap->random_seed);
-    log("..priority=%u\n", pri);
     ss_treap_insert_pri(treap, node, pri);
 }
 void ss_treap_increase_pri(ss_treap* treap, ss_treap_node* node, uint32_t priority)
