@@ -20,19 +20,15 @@ extern "C" {
 
     typedef struct ss_hmap_bucket {
         ss_hmap_entry_t* e;
-        unsigned int len;
     } ss_hmap_bucket_t;
 
     typedef struct ss_hmap  {
         ss_hmap_bucket_t* table;  /* buckets */
         uint32_t size; /* number of buckets */
         unsigned int n; /* current number of elements (entries) */
-        unsigned int max_bucket_size;
         int (*compar)(void* e1, void* e2);
         size_t offset; 
     } ss_hmap_t;
-
-    #define SS_HMAP_ENTRY_VALUE(ht,e) ((void*)((char*)(e) - (ht)->offset))
 
     /*
      * Creates a new chained hashmap, with the initial_size given

@@ -123,6 +123,8 @@ static uint32_t mod_hash_size(ss_hmap_t* ht, uint32_t k)
 }
 #define ht_hash_to_bucket(ht,h)  ((ht)->table + (mod_hash_size((ht), (h))))
 
+#define SS_HMAP_ENTRY_VALUE(ht,e) ((void*)((char*)(e) - (ht)->offset))
+
 static uint32_t _next_prime_for_expand(uint32_t minSize)
 {
     uint32_t* p;
@@ -138,7 +140,6 @@ ss_hmap_t* ht_init(ss_hmap_t* h,
 {
     h->n = 0;
     h->size = _next_prime_for_expand(initial_size);
-    h->max_bucket_size = 0;
     h->offset = 0;
     h->compar = fn;
     h->table = calloc(h->size, sizeof(ss_hmap_bucket_t));
@@ -155,6 +156,8 @@ void ht_clear(ss_hmap_t* ht)
 {
     free(ht->table);
     ht->table = NULL;
+    ht->size = 0;
+    ht->n = 0;
 }
 
 
@@ -163,12 +166,11 @@ float ht_load_factor(ss_hmap_t* h)
     return h->n*1.0/HASH_SIZE(h);
 }
 
-static void _ht_insert_entry(ss_hmap_t* ht, ss_hmap_bucket_t* bucket,
-        ss_hmap_entry_t* e);
+#define _ht_insert_entry(ht,bucket,entry) ((entry)->next = (bucket)->e,(bucket)->e = (entry),(ht)->n++)
 
 static void _ht_rehash(ss_hmap_t* ht)
 {
-    uint32_t newSize = _next_prime_for_expand(2*HASH_SIZE(ht));
+    uint32_t newSize = _next_prime_for_expand(2*HASH_SIZE(ht)+1);
     // printf("Current load factor %4.2f.. (size=%u, N=%u, max bkt size=%u) rehashing to %u ..\n", ht_load_factor(ht), ht->size, ht->n, ht->max_bucket_size, newSize);
     ss_hmap_t hnew = {};
     hnew.size = newSize;
@@ -189,24 +191,12 @@ static void _ht_rehash(ss_hmap_t* ht)
     free(ht->table);
     ht->table = hnew.table;
     ht->size = newSize;
-    ht->max_bucket_size = hnew.max_bucket_size;
-}
-
-static void _ht_insert_entry(ss_hmap_t* ht,
-                             ss_hmap_bucket_t* bucket,
-                             ss_hmap_entry_t* e)
-{
-    bucket->len++;
-    e->next = bucket->e;
-    bucket->e = e;
-    ht->n++;
-    if (bucket->len > ht->max_bucket_size)
-        ht->max_bucket_size = bucket->len;
 }
 
 void ht_delete(ss_hmap_t* ht, ss_hmap_entry_t* entry)
 {
     uint32_t h = entry->hashcode;
+    void* key = SS_HMAP_ENTRY_VALUE(ht, entry);
     ss_hmap_bucket_t* b = ht_hash_to_bucket(ht, h);
 
     if (b->e == NULL) {
@@ -215,10 +205,9 @@ void ht_delete(ss_hmap_t* ht, ss_hmap_entry_t* entry)
     ss_hmap_entry_t** e;
     for (e = &b->e; *e; ) {
         ss_hmap_entry_t* t = *e;
-        if (h == t->hashcode && ht->compar(t, entry) == 0) {
+        if (h == t->hashcode && ht->compar(SS_HMAP_ENTRY_VALUE(ht, t), key) == 0) {
             *e = t->next;
 
-            b->len--;
             ht->n--;
             return;
         }
@@ -252,7 +241,6 @@ void* ht_put(ss_hmap_t* ht, ss_hmap_entry_t* entry)
         }
     }
 
-
     if (ht->n + 1 > (3*ht->size >> 2)) { /* Use the 0.75 factor */
         /* We need to rehash ... */
         _ht_rehash(ht);
@@ -263,8 +251,4 @@ void* ht_put(ss_hmap_t* ht, ss_hmap_entry_t* entry)
     return SS_HMAP_ENTRY_VALUE(ht,entry);
 }
 
-bool ht_contains(ss_hmap_t* ht, ss_hmap_entry_t* entry)
-{
-    return ht_get(ht, entry) != NULL;
-}
 
