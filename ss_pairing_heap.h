@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 /*
- * An intrusive Pairing heap!
+ * An intrusive min Pairing heap!
  */
 typedef struct ss_pairing_node {
     struct ss_pairing_node* child;

@@ -48,6 +48,9 @@ ss_pairing_node* link(ss_pairing_node* head)
 {
     ss_pairing_node *current, *next, *prev;
 
+    if (head == NULL)
+        return NULL;
+
     prev = head->prev;
     /* 
     1st pass:
