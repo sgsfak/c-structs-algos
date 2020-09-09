@@ -110,7 +110,8 @@ ss_meldq_node* ss_meldq_extract_min(ss_meldq* q)
     if (r == NULL)
         return NULL;
     q->root = meld(q, r->left, r->right);
-    q->root->parent = NULL;
+    if (q->root)
+        q->root->parent = NULL;
     q->n--;
     r->parent = r->left = r->right = NULL;
     return r;
