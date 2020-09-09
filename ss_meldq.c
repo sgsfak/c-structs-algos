@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "meldq.h"
+#include <stdbool.h>
+#include "ss_meldq.h"
 
 
 /* splitmix64 for seeding xoroshiro: http://prng.di.unimi.it/splitmix64.c 
@@ -142,7 +143,22 @@ void ss_meldq_delete(ss_meldq* q, ss_meldq_node* node)
     q->n--;
 }
 
-void ss_meldq_update_pri(ss_meldq* h, ss_meldq_node* item);
+void ss_meldq_update_pri(ss_meldq* q, ss_meldq_node* node)
+{
+    /* If the update on the node's priority does not affect the 
+     * structure, we don't need to do anything. The update is 
+     * "innocent" if the node's priority is less than its parent's
+     * and more than its children'
+     */
+    bool change = (node->parent != NULL && q->compar(node->parent, node) > 0) ||
+        (node->left != NULL && q->compar(node->left, node) < 0) ||
+        (node->right != NULL && q->compar(node->right, node) < 0);
+
+    if (change) {
+        ss_meldq_delete(q, node);
+        ss_meldq_insert(q, node);
+    }
+}
 
 typedef struct {
     ss_meldq_node t;
