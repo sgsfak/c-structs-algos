@@ -139,3 +139,51 @@ ss_pairing_node* ss_pairing_extract_min(ss_pairing_heap* h)
     ss_pairing_delete(h, node);
     return node;
 }
+
+#include <stdio.h>
+
+static
+void ss_pairing_node_to_dot(ss_pairing_node* p, char* (*tostr)(const ss_pairing_node*))
+{
+
+    char label[400];
+    // snprintf(label, 400, "{<name> %s | <child> } | <next>}", tostr ? tostr(p) : "");
+
+    // printf("n%p [label=\"%s\"];\n", p, label);
+
+    snprintf(label, 400,
+            "<TABLE BORDER='0' CELLBORDER='1' CELLSPACING='0'><TR>"
+            " <TD PORT='name'>%s</TD>"
+            " <TD PORT='next'></TD>"
+            "</TR></TABLE>", tostr ? tostr(p) : "");
+    printf("n%p [label=<%s>];\n", p, label);
+
+    if (p->child) {
+        printf("\"n%p\":child -> \"n%p\":name;\n", p, p->child);
+        printf("{rank=same");
+        for (ss_pairing_node *c = p->child; c; c = c->next) {
+            printf(";\"n%p\"", c);
+        }
+        printf("};\n");
+    }
+    for (ss_pairing_node *c = p->child; c && c->next; c = c->next) {
+        printf("\"n%p\":next -> \"n%p\":name;\n", c, c->next);
+    }
+
+    for (ss_pairing_node *c = p->child; c; c = c->next) {
+        ss_pairing_node_to_dot(c, tostr);
+    }
+}
+
+void ss_pairing_to_dot(ss_pairing_heap* t, char* (*tostr)(const ss_pairing_node*))
+{
+
+    printf("digraph graphname {\n"
+           "rankdir=TB;"
+           "node [shape=plaintext];\n");
+    if (t->root)
+        ss_pairing_node_to_dot(t->root, tostr);
+
+    printf("}\n");
+}
+

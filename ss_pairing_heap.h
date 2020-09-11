@@ -25,5 +25,7 @@ void ss_pairing_delete(ss_pairing_heap* h, ss_pairing_node* item);
 void ss_pairing_update_item(ss_pairing_heap* h, ss_pairing_node* item);
 ss_pairing_heap* ss_pairing_merge(ss_pairing_heap* h1, ss_pairing_heap* h2);
 
+void ss_pairing_to_dot(ss_pairing_heap* h, char* (*tostr)(const ss_pairing_node*));
+
 /* Stolen from wikipedia (https://en.wikipedia.org/wiki/Offsetof) :*/
 #define container_of(ptr,type,member) ((type *)((char *)(1 ? (ptr) : &((type *)0)->member) - offsetof(type, member)))
